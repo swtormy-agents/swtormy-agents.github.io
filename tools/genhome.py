@@ -40,7 +40,7 @@ for k,d in L.items():
   langs=''.join(f'<li><a href="/{L[kk]["p"]}" lang="{L[kk]["hl"]}" hreflang="{L[kk]["hl"]}"'+(' aria-current="page"' if kk==k else '')+f'>{NAMES[kk]}</a></li>' for kk in L)
   facts=''.join(f'<li>{I[ic]}<div><strong>{a}</strong><span>{b}</span></div></li>' for ic,(a,b) in zip('buf',d['f']))
   h=(head(k,d['title'],S+d['p'],css='/home.css',extra=TC)
-   +f'\n<body>{mt}<a class="skip" href="#main">{d["skip"]}</a><header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
+   +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
    +f'<main id="main" tabindex="-1"><section class="hero wrap"><h1>{d["h1"]}</h1><p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
    +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
    +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p></div></div></li>\n'
