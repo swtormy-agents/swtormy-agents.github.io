@@ -29,7 +29,7 @@ TC='<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: lig
 def head(l,title,canon,alts=True,css='/home.css',extra='',desc=None):
   a=''.join(f'<link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}">' for k in L)+f'<link rel="alternate" hreflang="x-default" href="{S}">' if alts else ''
   c=f'<link rel="canonical" href="{canon}">' if canon else '<meta name="robots" content="noindex">'
-  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{desc or L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'
+  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{desc or L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'.replace('\u00a0',' ')  # U+00A0 only in visible text, never in head/attributes
 def nav(l):
   return '<nav aria-label="Language"><ul>'+''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}"'+(' aria-current="page"' if k==l else '')+f'>{NAMES[k]}</a></li>' for k in L)+'</ul></nav>'
 # Counsel condition: "Coming soon" cards have NO links (no <a>, no href, no tabindex)
