@@ -11,11 +11,11 @@ I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="
 NB='\u00a0'
 # copy: /workspace/design/noclaudkit-home/copy-review.md (verbatim; ru short-word U+00A0 via nb())
 L={
-'en':dict(p='',hl='en',title='NoClaudKit — tools that run in your browser',h1=f'Small tools for{NB}everyday files',lead='Tools that run in your browser. Files never leave your device.',cta='Convert images',conv='/image-converter/',tools='Tools',ct='Image converter',cd='HEIC, WebP, AVIF, PNG and JPEG to JPEG, PNG or WebP.',mt='',
+'en':dict(p='',hl='en',title='NoClaudKit — browser tools, files never leave your device',desc='Free image tools that run entirely in your browser. Files are not uploaded to a server and never leave your device. No sign-up.',og='en_US',h1=f'Small tools for{NB}everyday files',lead='Tools that run in your browser. Files never leave your device.',cta='Convert images',conv='/image-converter/',tools='Tools',ct='Image converter',cd='HEIC, WebP, AVIF, PNG and JPEG to JPEG, PNG or WebP.',mt='',
  soon='Coming soon',c2='Compress images',c2d='Make image files smaller.',c3='Resize images',c3d='Change image dimensions.',fh='How it works',f=[('Runs in your browser','Processing happens on your device.'),('No upload','Files are not sent to a server.'),('Free','No account needed.')],nav='Language',skip='Skip to content',nf='Page not found',nfb='Go to the home page'),
-'ru':dict(p='ru/',hl='ru',title='NoClaudKit — инструменты, которые работают в браузере',h1='Простые инструменты для файлов',lead='Инструменты работают в вашем браузере: файлы не отправляются на сервер и не покидают устройство.',cta='Конвертировать изображения',conv='/image-converter/ru/',tools='Инструменты',ct='Конвертер изображений',cd='HEIC, WebP, AVIF, PNG и JPEG в JPEG, PNG или WebP.',mt='',
+'ru':dict(p='ru/',hl='ru',title='NoClaudKit — инструменты прямо в браузере',desc='Бесплатные инструменты для изображений работают в вашем браузере: файлы не отправляются на сервер и не покидают устройство. Без регистрации.',og='ru_RU',h1='Простые инструменты для файлов',lead='Инструменты работают в вашем браузере: файлы не отправляются на сервер и не покидают устройство.',cta='Конвертировать изображения',conv='/image-converter/ru/',tools='Инструменты',ct='Конвертер изображений',cd='HEIC, WebP, AVIF, PNG и JPEG в JPEG, PNG или WebP.',mt='',
  soon='Скоро',c2='Сжатие изображений',c2d='Уменьшает размер файлов.',c3='Изменение размера',c3d='Меняет ширину и высоту изображения.',fh='Как это работает',f=[('Работает в браузере','Обработка идёт на вашем устройстве.'),('Без загрузки на сервер','Файлы не отправляются на сервер.'),('Бесплатно','Регистрация не нужна.')],nav='Язык',skip='Перейти к содержанию',nf='Страница не найдена',nfb='На главную'),
-'zh':dict(p='zh/',hl='zh-Hans',title='NoClaudKit — 在浏览器中本地运行的工具',h1='处理日常文件的小工具',lead='全部工具均在您的浏览器中本地运行，文件不会上传到服务器。',cta='转换图片',conv='/image-converter/zh/',tools='工具',ct='图片转换器',cd='将 HEIC、WebP、AVIF、PNG 和 JPEG 转换为 JPEG、PNG 或 WebP。',mt='机器翻译，可能存在不准确之处。',
+'zh':dict(p='zh/',hl='zh-Hans',title='NoClaudKit — 在浏览器中本地运行的工具',desc='免费图片工具，完全在浏览器中本地运行。文件不会上传到服务器，也不会离开您的设备。无需注册。',og='zh_CN',h1='处理日常文件的小工具',lead='全部工具均在您的浏览器中本地运行，文件不会上传到服务器。',cta='转换图片',conv='/image-converter/zh/',tools='工具',ct='图片转换器',cd='将 HEIC、WebP、AVIF、PNG 和 JPEG 转换为 JPEG、PNG 或 WebP。',mt='机器翻译，可能存在不准确之处。',
  soon='即将推出',c2='图片压缩',c2d='减小图片文件大小。',c3='调整图片尺寸',c3d='更改图片的宽度和高度。',fh='工作方式',f=[('在浏览器中运行','在您的设备上完成处理。'),('不上传','文件不会上传到服务器。'),('免费','无需注册账号。')],nav='语言',skip='跳到主要内容',nf='页面未找到',nfb='返回首页')}
 SW='не и с в на к о у а из за по от до'.split()
 def nb(t): return re.sub(r'(?<![\w\u0400-\u04FF])('+'|'.join(SW)+r') (?=\S)',lambda m:m.group(1)+NB,t,flags=re.I)
@@ -23,13 +23,13 @@ def fix(v):
   if isinstance(v,str): return nb(v)
   if isinstance(v,list): return [tuple(nb(x) for x in p) for p in v]
   return v
-L['ru']={k:(fix(v) if k not in('p','hl','conv') else v) for k,v in L['ru'].items()}
+L['ru']={k:(fix(v) if k not in('p','hl','conv','og') else v) for k,v in L['ru'].items()}
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
 TC='<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">'
-def head(l,title,canon,alts=True,css='/home.css',extra=''):
+def head(l,title,canon,alts=True,css='/home.css',extra='',desc=None):
   a=''.join(f'<link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}">' for k in L)+f'<link rel="alternate" hreflang="x-default" href="{S}">' if alts else ''
   c=f'<link rel="canonical" href="{canon}">' if canon else '<meta name="robots" content="noindex">'
-  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'
+  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{desc or L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'
 def nav(l):
   return '<nav aria-label="Language"><ul>'+''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}"'+(' aria-current="page"' if k==l else '')+f'>{NAMES[k]}</a></li>' for k in L)+'</ul></nav>'
 # Counsel condition: "Coming soon" cards have NO links (no <a>, no href, no tabindex)
@@ -39,7 +39,8 @@ for k,d in L.items():
   mt=f'<div class="mt" role="note"><div class="wrap"><span>{d["mt"]}</span><a href="/" lang="en" hreflang="en">Read in English</a></div></div>' if d['mt'] else ''
   langs=''.join(f'<li><a href="/{L[kk]["p"]}" lang="{L[kk]["hl"]}" hreflang="{L[kk]["hl"]}"'+(' aria-current="page"' if kk==k else '')+f'>{NAMES[kk]}</a></li>' for kk in L)
   facts=''.join(f'<li>{I[ic]}<div><strong>{a}</strong><span>{b}</span></div></li>' for ic,(a,b) in zip('buf',d['f']))
-  h=(head(k,d['title'],S+d['p'],css='/home.css',extra=TC)
+  og=f'<meta property="og:type" content="website"><meta property="og:url" content="{S}{d["p"]}"><meta property="og:title" content="{d["title"]}"><meta property="og:description" content="{d["desc"]}"><meta property="og:locale" content="{d["og"]}">'+''.join(f'<meta property="og:locale:alternate" content="{L[kk]["og"]}">' for kk in L if kk!=k)
+  h=(head(k,d['title'],S+d['p'],css='/home.css',extra=TC+og,desc=d['desc'])
    +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
    +f'<main id="main" tabindex="-1"><section class="hero wrap"><h1>{d["h1"]}</h1><p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
    +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
