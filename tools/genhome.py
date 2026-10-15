@@ -26,7 +26,7 @@ def fix(v):
 L['ru']={k:(fix(v) if k not in('p','hl','conv') else v) for k,v in L['ru'].items()}
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
 TC='<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">'
-def head(l,title,canon,alts=True,css='/style.css',extra=''):
+def head(l,title,canon,alts=True,css='/home.css',extra=''):
   a=''.join(f'<link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}">' for k in L)+f'<link rel="alternate" hreflang="x-default" href="{S}">' if alts else ''
   c=f'<link rel="canonical" href="{canon}">' if canon else '<meta name="robots" content="noindex">'
   return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'
@@ -49,7 +49,8 @@ for k,d in L.items():
    +'<footer><div class="wrap"><span translate="no">NoClaudKit</span></div></footer></body></html>\n')
   open(f'{D}/{d["p"]}index.html','w').write(h)
 x=L['en'];r=L['ru'];z=L['zh']
-open(f'{D}/404.html','w').write(head('en','404 — NoClaudKit',None,False)+f'<body><header><a class="brand" href="/">NoClaudKit</a>{nav(None)}</header><main><h1>404</h1><p lang="en">{x["nf"]}. <a href="/">{x["nfb"]}</a></p><p lang="ru">{r["nf"]}. <a href="/ru/">{r["nfb"]}</a></p><p lang="zh-Hans">{z["nf"]}。<a href="/zh/">{z["nfb"]}</a></p></main></body></html>\n')
+langs404=''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}">{NAMES[k]}</a></li>' for k in L)
+open(f'{D}/404.html','w').write(head('en','404 — NoClaudKit',None,False,css='/home.css',extra=TC)+f'\n<body><a class="skip" href="#main">Skip to content</a><header><div class="wrap"><a class="brand" href="/">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="Language"><ul class="langs">{langs404}</ul></nav></div></header>\n<main id="main" tabindex="-1"><section class="hero wrap nf"><h1>404</h1><p lang="en">{x["nf"]}. <a href="/">{x["nfb"]}</a></p><p lang="ru">{r["nf"]}. <a href="/ru/">{r["nfb"]}</a></p><p lang="zh-Hans">{z["nf"]}。<a href="/zh/">{z["nfb"]}</a></p></section></main>\n<footer><div class="wrap"><span translate="no">NoClaudKit</span></div></footer></body></html>\n')
 open(f'{D}/CNAME','w').write('noclaudkit.com\n')
 open(f'{D}/.nojekyll','w').write('')
 open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noclaudkit.com/sitemap.xml\n')

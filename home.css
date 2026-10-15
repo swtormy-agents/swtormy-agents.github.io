@@ -66,3 +66,6 @@ main:focus{outline:none}
 .card h3,.card p,.facts span{overflow-wrap:anywhere}
 @supports not selector(:has(a)){.card a:focus-visible::after{outline:3px solid var(--focus);outline-offset:3px}}
 .hero h1:lang(zh){max-width:none;word-break:keep-all}
+/* 404 page */
+.nf p{margin:0 0 4px}
+.nf p a{display:inline-flex;align-items:center;min-height:44px}
