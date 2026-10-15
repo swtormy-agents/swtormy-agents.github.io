@@ -2,7 +2,7 @@ import os,re
 D='/workspace/swtormy-agents.github.io'; S='https://noclaudkit.com/'
 CSP="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 L={'en':dict(p='',hl='en',t='NoClaudKit — private browser tools',h='NoClaudKit',d='Privacy-first tools that run entirely in your browser. Your files are never uploaded.',s='Tools',n='Image converter',nd='HEIC, WebP, AVIF, PNG and JPG conversion on your device.',u='image-converter/',nf='Page not found',nfb='Go to the home page'),
-'ru':dict(p='ru/',hl='ru',t='NoClaudKit — инструменты, которые работают в\u00a0браузере',h='NoClaudKit',d='Инструменты работают в вашем браузере: файлы не отправляются на сервер и не покидают устройство.',s='Инструменты',n='Конвертер изображений',nd='HEIC, WebP, AVIF, PNG и\u00a0JPG — конвертация на\u00a0вашем устройстве.',u='image-converter/ru/',nf='Страница не\u00a0найдена',nfb='На главную'),
+'ru':dict(p='ru/',hl='ru',t='NoClaudKit — инструменты, которые работают в\u00a0браузере',h='NoClaudKit',d='Инструменты работают в вашем браузере: файлы не отправляются на сервер и не покидают устройство.',s='Инструменты',n='Конвертер изображений',nd='HEIC, WebP, AVIF, PNG и\u00a0JPG — конвертация на\u00a0вашем устройстве.',u='image-converter/ru/',nf='Страница не\u00a0найдена',nfb='На главную'),
 'zh':dict(p='zh/',hl='zh-Hans',t='NoClaudKit — 在浏览器中本地运行的工具',h='NoClaudKit',d='全部工具均在您的浏览器中本地运行，文件不会上传到服务器。',s='工具',n='图片格式转换器',nd='在您的设备上转换 HEIC、WebP、AVIF、PNG 和 JPG。',u='image-converter/zh/',nf='页面未找到',nfb='返回首页')}
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
 def head(l,title,canon,alts=True):
