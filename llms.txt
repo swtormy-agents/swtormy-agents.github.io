@@ -1,0 +1,14 @@
+# NoClaudKit
+
+> Small free tools for everyday files that run in the browser. Files never leave your device: processing happens locally, nothing is uploaded, no account needed.
+
+Available now: an image converter. Image compression and resizing tools are planned but not available yet.
+
+## Tools
+
+- [Local Image Converter](https://noclaudkit.com/image-converter/llms.txt): HEIC/HEIF, WebP, AVIF, PNG and JPEG to JPEG, PNG, or WebP/AVIF where the browser can encode them; runs locally in the browser
+- [Image converter overview (Markdown)](https://noclaudkit.com/image-converter/index.md)
+
+## Optional
+
+- [Home page](https://noclaudkit.com/)
