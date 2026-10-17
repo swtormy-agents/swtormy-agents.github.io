@@ -86,3 +86,4 @@ main:focus{outline:none}
 }
 /* extra, not header: zh h1 (keep-all) overflows at 320 (scrollWidth 334) on live too */
 @media (max-width:359px){.hero h1:lang(zh){overflow-wrap:anywhere}}
+footer p{margin:8px 0 0;max-width:60ch}
