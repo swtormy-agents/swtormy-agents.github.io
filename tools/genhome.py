@@ -1,5 +1,5 @@
 import os,re
-D='/workspace/swtormy-agents.github.io'; S='https://noclaudkit.com/'
+D=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); S='https://noclaudkit.com/'
 CSP="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="currentColor"/><path d="M8 19V9l12 10V9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 'conv':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="11" rx="2"/><path d="m3 12 3-3 4 4"/><path d="M17 9h3v11H9v-3"/><path d="m15 18 2 2 2-2"/></svg>',
@@ -55,7 +55,7 @@ open(f'{D}/404.html','w').write(head('en','404 — NoClaudKit',None,False,css='/
 open(f'{D}/CNAME','w').write('noclaudkit.com\n')
 open(f'{D}/.nojekyll','w').write('')
 open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noclaudkit.com/sitemap.xml\n')
-open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
+open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n<sitemap><loc>{S}pdf/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
 alts=''.join(f'<xhtml:link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}"/>' for k in L)+f'<xhtml:link rel="alternate" hreflang="x-default" href="{S}"/>'
 open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc>{alts}</url>\n' for k in L)+'</urlset>\n')
 # redirect stubs
