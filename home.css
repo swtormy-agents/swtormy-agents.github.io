@@ -1,8 +1,9 @@
-:root{--page:#f4f5f8;--card:#fff;--border:#7a8496;--line:#d5d9e1;--text:#141821;--muted:#4a5263;--accent:#1c449c;--accent-ink:#fff;--accent-soft:#e6ecf8;--focus:#1c449c;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--page:#10131a;--card:#181c25;--border:#7d879a;--line:#2c3240;--text:#eef0f4;--muted:#b4bbc8;--accent:#8fb0ff;--accent-ink:#0b1430;--accent-soft:#1d2a4a;--focus:#8fb0ff}}
+/* shared tools theme 2026-10-23: daisyUI «lagoon» / «lagoon-dark» tokens and system font stack from swtormy-agents/pdf + image-converter tools/css/input.css */
+:root{--page:#ffffff;--card:#ffffff;--surface:#f0f7f7;--border:#d5e7e7;--line:#d5e7e7;--text:#0f2a2e;--muted:color-mix(in oklab,#0f2a2e 80%,transparent);--accent:#0f766e;--accent-ink:#ffffff;--accent-soft:#f0f7f7;--focus:#0f766e;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--page:#0b1d20;--card:#0b1d20;--surface:#102a2e;--border:#1d3d42;--line:#1d3d42;--text:#e3f2f1;--muted:color-mix(in oklab,#e3f2f1 80%,transparent);--accent:#2dd4bf;--accent-ink:#042f2e;--accent-soft:#102a2e;--focus:#2dd4bf}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--page);color:var(--text);font:400 1rem/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","PingFang SC","Microsoft YaHei",sans-serif}
+body{margin:0;background:var(--page);color:var(--text);font:400 1rem/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Noto Sans SC",sans-serif}
 :lang(zh) body,body:lang(zh){line-height:1.7}
 a{color:var(--accent)}
 :focus-visible{outline:3px solid var(--focus);outline-offset:3px;border-radius:6px}
@@ -87,3 +88,19 @@ main:focus{outline:none}
 /* extra, not header: zh h1 (keep-all) overflows at 320 (scrollWidth 334) on live too */
 @media (max-width:359px){.hero h1:lang(zh){overflow-wrap:anywhere}}
 footer p{margin:8px 0 0;max-width:60ch}
+/* shared tools header 2026-10-23: navbar like /pdf/ and /image-converter/ (base-100 bar, base-300 bottom border, 64px, max-w-5xl, semibold brand, primary logo) */
+header{background:var(--card);border-bottom:1px solid var(--border)}
+header .wrap{min-height:64px;max-width:1024px}
+.wrap{max-width:1024px}
+.brand{font-weight:600}
+.brand svg{color:var(--accent)}
+.brand svg path{stroke:var(--accent-ink)}
+.card{border-color:var(--border);border-radius:16px}
+.card a::after{border-radius:16px}
+.card.live{border-width:1px;border-color:var(--border)}
+.card.live:hover{border-color:var(--accent);background:var(--card)}
+.card .ico{border-radius:8px;background:var(--surface)}
+.btn{border-radius:8px}
+.facts{background:var(--surface);border-top:1px solid var(--border)}
+footer{border-top:1px solid var(--border)}
+.card.soon .ico{background:transparent}
