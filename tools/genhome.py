@@ -1,6 +1,6 @@
 import os,re
 D=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); S='https://noclaudkit.com/'
-CSP="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+CSP="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="currentColor"/><path d="M8 19V9l12 10V9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 'conv':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="11" rx="2"/><path d="m3 12 3-3 4 4"/><path d="M17 9h3v11H9v-3"/><path d="m15 18 2 2 2-2"/></svg>',
 'comp':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v6m-3-3 3 3 3-3M12 21v-6m-3 3 3-3 3 3M4 12h16"/></svg>',
@@ -30,7 +30,7 @@ TC='<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: lig
 def head(l,title,canon,alts=True,css='/home.css',extra='',desc=None):
   a=''.join(f'<link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}">' for k in L)+f'<link rel="alternate" hreflang="x-default" href="{S}">' if alts else ''
   c=f'<link rel="canonical" href="{canon}">' if canon else '<meta name="robots" content="noindex">'
-  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{desc or L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="{css}"></head>'.replace('\u00a0',' ')  # U+00A0 only in visible text, never in head/attributes
+  return f'<!doctype html>\n<html lang="{L[l]["hl"]}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title><meta name="description" content="{desc or L[l]["lead"]}">{extra}{c}{a}<link rel="icon" href="/favicon.svg"><script src="/theme.js"></script><link rel="stylesheet" href="{css}"></head>'.replace('\u00a0',' ')  # U+00A0 only in visible text, never in head/attributes
 def nav(l):
   return '<nav aria-label="Language"><ul>'+''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}"'+(' aria-current="page"' if k==l else '')+f'>{NAMES[k]}</a></li>' for k in L)+'</ul></nav>'
 # Counsel condition: "Coming soon" cards have NO links (no <a>, no href, no tabindex)

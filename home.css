@@ -1,6 +1,9 @@
 /* shared tools theme 2026-10-23: daisyUI «lagoon» / «lagoon-dark» tokens and system font stack from swtormy-agents/pdf + image-converter tools/css/input.css */
 :root{--page:#ffffff;--card:#ffffff;--surface:#f0f7f7;--border:#d5e7e7;--line:#d5e7e7;--text:#0f2a2e;--muted:color-mix(in oklab,#0f2a2e 80%,transparent);--accent:#0f766e;--accent-ink:#ffffff;--accent-soft:#f0f7f7;--focus:#0f766e;color-scheme:light dark}
-@media (prefers-color-scheme:dark){:root{--page:#0b1d20;--card:#0b1d20;--surface:#102a2e;--border:#1d3d42;--line:#1d3d42;--text:#e3f2f1;--muted:color-mix(in oklab,#e3f2f1 80%,transparent);--accent:#2dd4bf;--accent-ink:#042f2e;--accent-soft:#102a2e;--focus:#2dd4bf}}
+@media (prefers-color-scheme:dark){:root:not([data-theme=lagoon]){--page:#0b1d20;--card:#0b1d20;--surface:#102a2e;--border:#1d3d42;--line:#1d3d42;--text:#e3f2f1;--muted:color-mix(in oklab,#e3f2f1 80%,transparent);--accent:#2dd4bf;--accent-ink:#042f2e;--accent-soft:#102a2e;--focus:#2dd4bf}}
+/* saved theme (localStorage "lic-theme", set by /theme.js as on /pdf/ and /image-converter/) */
+:root[data-theme=lagoon]{color-scheme:light}
+:root[data-theme=lagoon-dark]{--page:#0b1d20;--card:#0b1d20;--surface:#102a2e;--border:#1d3d42;--line:#1d3d42;--text:#e3f2f1;--muted:color-mix(in oklab,#e3f2f1 80%,transparent);--accent:#2dd4bf;--accent-ink:#042f2e;--accent-soft:#102a2e;--focus:#2dd4bf;color-scheme:dark}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--page);color:var(--text);font:400 1rem/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC","Source Han Sans SC","Noto Sans SC",sans-serif}
@@ -54,7 +57,7 @@ footer{border-top:1px solid var(--line);padding:20px 0 32px;color:var(--muted);f
 /* guidelines pass 2026-10-15 */
 html{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .wrap{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
-@media (min-width:640px){.wrap{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}}
+@media (min-width:600px){.wrap{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}}
 h1,h2,h3{text-wrap:balance}
 p,.facts span{text-wrap:pretty}
 h2[id],main{scroll-margin-top:16px}
