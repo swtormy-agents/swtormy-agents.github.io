@@ -26,6 +26,7 @@ WORKFLOW_FILE = "indexnow.yml"
 WORKFLOW_BRANCH = "main"
 URL_LIST_CAP = 10_000
 KEY_NAME_RE = re.compile(r"^[0-9a-f]{8,128}\.txt$")
+FULL_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # Site-wide chrome / generator that affect every home-page language variant.
 SHARED_SITE_FILES = frozenset(
@@ -170,6 +171,48 @@ def is_ancestor(repo_root: Path, ancestor: str, sha: str) -> bool:
     return result.returncode == 0
 
 
+def is_full_sha(value: str | None) -> bool:
+    return bool(value) and bool(FULL_SHA_RE.fullmatch(value))
+
+
+def rev_parse(repo_root: Path, ref: str) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", ref],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or f"exit {result.returncode}"
+        raise IndexNowError(f"cannot resolve {ref}: {detail}")
+    return result.stdout.strip()
+
+
+def resolve_main_tip(repo_root: Path) -> str:
+    for ref in ("refs/heads/main", "main", "origin/main"):
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", ref],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    return rev_parse(repo_root, "HEAD")
+
+
+def validate_explicit_before(repo_root: Path, sha: str) -> str:
+    """Require a 40-hex SHA that is an ancestor of main."""
+    if not is_full_sha(sha):
+        raise IndexNowError("after must be a 40-character hex commit SHA")
+    tip = resolve_main_tip(repo_root)
+    if not is_ancestor(repo_root, sha, tip):
+        raise IndexNowError("after is not an ancestor of main")
+    return sha
+
+
 def resolve_before(repo_root: Path, after: str, previous_head: str | None) -> str:
     """Prefer the last successful ping SHA when it is an ancestor of `after`."""
     if previous_head and is_ancestor(repo_root, previous_head, after):
@@ -294,9 +337,13 @@ def collect_urls(repo_root: Path, files: list[str] | None, before: str | None, a
     if files is not None:
         changed = [normalize_repo_path(path) for path in files]
     else:
-        if not after:
-            raise IndexNowError("either --files or --after is required")
-        resolved_before = resolve_before_sha(repo_root, after, before)
+        if before:
+            after = after or rev_parse(repo_root, "HEAD")
+            resolved_before = validate_explicit_before(repo_root, before)
+        else:
+            if not after:
+                raise IndexNowError("either --files or --after is required")
+            resolved_before = resolve_before_sha(repo_root, after, None)
         changed = changed_files_between(repo_root, resolved_before, after)
     return map_changed_files(changed, sitemap_locs, alternates)
 
@@ -315,7 +362,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="POST once to IndexNow; logs HTTP status and URL count only",
     )
-    parser.add_argument("--before", help="git SHA for the start of the pushed range")
+    parser.add_argument(
+        "--before",
+        default=os.environ.get("INDEXNOW_BEFORE") or None,
+        help="git SHA for the start of the range (or INDEXNOW_BEFORE)",
+    )
     parser.add_argument(
         "--after",
         default=os.environ.get("INDEXNOW_AFTER") or None,
