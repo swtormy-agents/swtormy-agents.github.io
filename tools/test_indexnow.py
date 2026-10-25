@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -272,6 +274,207 @@ class CliTests(unittest.TestCase):
                     )
             self.assertEqual(code, 1)
             self.assertEqual(stderr.getvalue().strip(), "status=403 url_count=3")
+
+
+INDEPENDENT_URLSET = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<url><loc>https://noclaudkit.com/a/</loc></url>
+<url><loc>https://noclaudkit.com/b/</loc></url>
+</urlset>
+"""
+
+
+def run_git(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-c", "commit.gpgsign=false", *args],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def make_multicommit_repo(tmp: Path) -> dict[str, str]:
+    """Three commits: base, then /a/, then /b/. Independent sitemap locs."""
+    write_repo(tmp, urlset=INDEPENDENT_URLSET)
+    run_git(tmp, "init", "-b", "main")
+    run_git(tmp, "config", "user.name", "Test")
+    run_git(tmp, "config", "user.email", "test@example.com")
+    run_git(tmp, "add", ".")
+    run_git(tmp, "commit", "-m", "base")
+    c1 = run_git(tmp, "rev-parse", "HEAD")
+    tmp.joinpath("a").mkdir()
+    tmp.joinpath("a", "index.html").write_text("a\n", encoding="utf-8")
+    run_git(tmp, "add", "a/index.html")
+    run_git(tmp, "commit", "-m", "add a")
+    c2 = run_git(tmp, "rev-parse", "HEAD")
+    tmp.joinpath("b").mkdir()
+    tmp.joinpath("b", "index.html").write_text("b\n", encoding="utf-8")
+    run_git(tmp, "add", "b/index.html")
+    run_git(tmp, "commit", "-m", "add b")
+    c3 = run_git(tmp, "rev-parse", "HEAD")
+    return {"c1": c1, "c2": c2, "c3": c3}
+
+
+class RangeResolutionTests(unittest.TestCase):
+    def test_multi_commit_range_includes_earlier_push_commits(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            only_tip = indexnow.changed_files_between(tmp, f"{shas['c3']}^1", shas["c3"])
+            since_last_ping = indexnow.changed_files_between(tmp, shas["c1"], shas["c3"])
+            self.assertEqual(only_tip, ["b/index.html"])
+            self.assertEqual(since_last_ping, ["a/index.html", "b/index.html"])
+            self.assertEqual(
+                indexnow.collect_urls(tmp, None, shas["c1"], shas["c3"]),
+                ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
+            )
+            with mock.patch.object(indexnow, "lookup_previous_successful_head", return_value=None):
+                self.assertEqual(
+                    indexnow.collect_urls(tmp, None, None, shas["c3"]),
+                    ["https://noclaudkit.com/b/"],
+                )
+
+    def test_resolve_before_uses_previous_head_when_ancestor(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            self.assertEqual(
+                indexnow.resolve_before(tmp, shas["c3"], shas["c1"]),
+                shas["c1"],
+            )
+            self.assertTrue(indexnow.is_ancestor(tmp, shas["c1"], shas["c3"]))
+
+    def test_resolve_before_falls_back_when_none(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            self.assertEqual(indexnow.resolve_before(tmp, shas["c3"], None), shas["c2"])
+            self.assertEqual(indexnow.first_parent(tmp, shas["c3"]), shas["c2"])
+
+    def test_resolve_before_falls_back_when_not_ancestor(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            run_git(tmp, "checkout", "--orphan", "other")
+            tmp.joinpath("orphan.txt").write_text("x\n", encoding="utf-8")
+            run_git(tmp, "add", "orphan.txt")
+            run_git(tmp, "commit", "-m", "orphan")
+            orphan = run_git(tmp, "rev-parse", "HEAD")
+            run_git(tmp, "checkout", "main")
+            self.assertFalse(indexnow.is_ancestor(tmp, orphan, shas["c3"]))
+            self.assertEqual(indexnow.resolve_before(tmp, shas["c3"], orphan), shas["c2"])
+            self.assertEqual(
+                indexnow.resolve_before(tmp, shas["c3"], "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+                shas["c2"],
+            )
+
+    def test_lookup_skips_current_run_and_returns_previous_head(self):
+        payload = {
+            "workflow_runs": [
+                {"id": 99, "conclusion": "success", "head_sha": "aaa111"},
+                {"id": 88, "conclusion": "success", "head_sha": "bbb222"},
+            ]
+        }
+        with mock.patch.object(indexnow, "github_get_json", return_value=payload) as get_json:
+            head = indexnow.previous_successful_workflow_head(
+                "o/r", "token", exclude_run_id="99"
+            )
+        self.assertEqual(head, "bbb222")
+        url = get_json.call_args[0][0]
+        self.assertIn("/repos/o/r/actions/workflows/indexnow.yml/runs", url)
+        self.assertIn("branch=main", url)
+        self.assertIn("status=success", url)
+
+    def test_lookup_returns_none_when_api_empty_or_fails(self):
+        with mock.patch.object(indexnow, "github_get_json", return_value={"workflow_runs": []}):
+            self.assertIsNone(indexnow.previous_successful_workflow_head("o/r", "token"))
+        with mock.patch.object(
+            indexnow, "github_get_json", side_effect=urllib.error.URLError("nope")
+        ):
+            self.assertIsNone(indexnow.previous_successful_workflow_head("o/r", "token"))
+
+    def test_main_uses_previous_workflow_sha_for_multi_commit_range(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stdout = io.StringIO()
+            env = {
+                "GITHUB_TOKEN": "test-token",
+                "GITHUB_REPOSITORY": "o/r",
+                "GITHUB_RUN_ID": "99",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(
+                    indexnow, "previous_successful_workflow_head", return_value=shas["c1"]
+                ) as lookup:
+                    with mock.patch.object(indexnow.urllib.request, "urlopen") as urlopen:
+                        with mock.patch.object(sys, "stdout", stdout):
+                            code = indexnow.main(
+                                ["--dry-run", "--repo-root", str(tmp), "--after", shas["c3"]]
+                            )
+            self.assertEqual(code, 0)
+            urlopen.assert_not_called()
+            lookup.assert_called_once()
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(
+                payload["urlList"],
+                ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
+            )
+
+    def test_main_falls_back_to_first_parent_when_previous_not_ancestor(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stdout = io.StringIO()
+            env = {"GITHUB_TOKEN": "test-token", "GITHUB_REPOSITORY": "o/r"}
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(
+                    indexnow,
+                    "previous_successful_workflow_head",
+                    return_value="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                ):
+                    with mock.patch.object(sys, "stdout", stdout):
+                        code = indexnow.main(
+                            ["--dry-run", "--repo-root", str(tmp), "--after", shas["c3"]]
+                        )
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["urlList"], ["https://noclaudkit.com/b/"])
+
+    def test_submit_still_posts_once_for_multi_commit_range(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stderr = io.StringIO()
+
+            class Resp:
+                status = 202
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+                def read(self):
+                    return b""
+
+            with mock.patch.object(indexnow, "lookup_previous_successful_head", return_value=shas["c1"]):
+                with mock.patch.object(indexnow.urllib.request, "urlopen", return_value=Resp()) as urlopen:
+                    with mock.patch.object(sys, "stderr", stderr):
+                        code = indexnow.main(
+                            ["--submit", "--repo-root", str(tmp), "--after", shas["c3"]]
+                        )
+            self.assertEqual(code, 0)
+            self.assertEqual(urlopen.call_count, 1)
+            sent = json.loads(urlopen.call_args[0][0].data.decode("utf-8"))
+            self.assertEqual(
+                sent["urlList"],
+                ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
+            )
+            self.assertEqual(stderr.getvalue().strip(), "status=202 url_count=2")
 
 
 class LiveRepoTests(unittest.TestCase):

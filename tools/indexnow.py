@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -20,6 +21,9 @@ from pathlib import Path
 HOST = "noclaudkit.com"
 ORIGIN = f"https://{HOST}"
 INDEXNOW_ENDPOINT = "https://api.indexnow.org/indexnow"
+GITHUB_API = "https://api.github.com"
+WORKFLOW_FILE = "indexnow.yml"
+WORKFLOW_BRANCH = "main"
 URL_LIST_CAP = 10_000
 KEY_NAME_RE = re.compile(r"^[0-9a-f]{8,128}\.txt$")
 
@@ -155,6 +159,84 @@ def first_parent(repo_root: Path, sha: str) -> str:
     return result.stdout.strip()
 
 
+def is_ancestor(repo_root: Path, ancestor: str, sha: str) -> bool:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, sha],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def resolve_before(repo_root: Path, after: str, previous_head: str | None) -> str:
+    """Prefer the last successful ping SHA when it is an ancestor of `after`."""
+    if previous_head and is_ancestor(repo_root, previous_head, after):
+        return previous_head
+    return first_parent(repo_root, after)
+
+
+def github_get_json(url: str, token: str) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def previous_successful_workflow_head(
+    repo: str,
+    token: str,
+    workflow_file: str = WORKFLOW_FILE,
+    branch: str = WORKFLOW_BRANCH,
+    exclude_run_id: str | None = None,
+) -> str | None:
+    """Return head_sha of the last successful IndexNow workflow run on main."""
+    url = (
+        f"{GITHUB_API}/repos/{repo}/actions/workflows/{workflow_file}/runs"
+        f"?branch={branch}&status=success&per_page=20"
+    )
+    try:
+        data = github_get_json(url, token)
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError, OSError):
+        return None
+    exclude = str(exclude_run_id) if exclude_run_id else None
+    for run in data.get("workflow_runs") or []:
+        if exclude and str(run.get("id")) == exclude:
+            continue
+        if run.get("conclusion") not in (None, "success"):
+            continue
+        head = run.get("head_sha")
+        if head:
+            return str(head)
+    return None
+
+
+def lookup_previous_successful_head() -> str | None:
+    token = os.environ.get("GITHUB_TOKEN") or ""
+    repo = os.environ.get("GITHUB_REPOSITORY") or ""
+    if not token or not repo:
+        return None
+    return previous_successful_workflow_head(
+        repo,
+        token,
+        exclude_run_id=os.environ.get("GITHUB_RUN_ID") or None,
+    )
+
+
+def resolve_before_sha(repo_root: Path, after: str, before_override: str | None) -> str:
+    if before_override:
+        return before_override
+    return resolve_before(repo_root, after, lookup_previous_successful_head())
+
+
 def read_key(repo_root: Path) -> tuple[str, str]:
     """Return (key, keyLocation) from the public root key file only."""
     matches: list[Path] = []
@@ -210,7 +292,7 @@ def collect_urls(repo_root: Path, files: list[str] | None, before: str | None, a
     else:
         if not after:
             raise IndexNowError("either --files or --after is required")
-        resolved_before = before or first_parent(repo_root, after)
+        resolved_before = resolve_before_sha(repo_root, after, before)
         changed = changed_files_between(repo_root, resolved_before, after)
     return map_changed_files(changed, sitemap_locs, alternates)
 
