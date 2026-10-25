@@ -1,0 +1,34 @@
+name: IndexNow ping
+
+on:
+  workflow_run:
+    workflows:
+      - pages-build-deployment
+    types:
+      - completed
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ping:
+    name: Notify IndexNow of changed URLs
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out deployed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Submit changed sitemap URLs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: python3 tools/indexnow.py --submit --after "${{ github.event.workflow_run.head_sha }}"
