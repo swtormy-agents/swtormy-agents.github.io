@@ -1,4 +1,4 @@
-import os,re
+import json,os,re
 D=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); S='https://noclaudkit.com/'
 CSP="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="currentColor"/><path d="M8 19V9l12 10V9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -25,7 +25,27 @@ def fix(v):
   if isinstance(v,list): return [tuple(nb(x) for x in p) for p in v]
   return v
 L['ru']={k:(fix(v) if k not in('p','hl','conv','og','pdf') else v) for k,v in L['ru'].items()}
+IL=json.load(open(f'{D}/tools/i18n/interlink.json',encoding='utf-8'))
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
+FT_KEYS=('home','conv','pdf','heic','merge','split','jpg')
+FT_LABEL={'home':'ft_home','conv':'f_conv','pdf':'f_pdf','heic':'ft_heic','merge':'ft_merge','split':'ft_split','jpg':'ft_jpg'}
+def loc(l): return '' if l=='en' else l+'/'
+def vis(l,s): return nb(s) if l=='ru' else s
+def ft_href(l,key):
+  p=loc(l)
+  return {'home':f'/{p}','conv':f'/image-converter/{p}','pdf':f'/pdf/{p}',
+          'heic':f'/image-converter/{p}heic-to-jpg.html',
+          'merge':f'/pdf/{p}merge-pdf.html','split':f'/pdf/{p}split-pdf.html',
+          'jpg':f'/pdf/{p}jpg-to-pdf.html'}[key]
+def pop_html(l,keys):
+  t=IL[l]
+  return '<ul class="pop">'+''.join(f'<li><a href="{ft_href(l,k)}">{vis(l,t[FT_LABEL[k]])}</a></li>' for k in keys)+'</ul>'
+def ft_html(l):
+  t=IL[l]; items=[]
+  for key in FT_KEYS:
+    items.append('<li><a href="'+ft_href(l,key)+'"'+(' translate="no"' if key=='home' else '')
+                 +(' aria-current="page"' if key=='home' else '')+'>'+vis(l,t[FT_LABEL[key]])+'</a></li>')
+  return f'<nav class="ft" aria-labelledby="ft-h"><h2 id="ft-h">{vis(l,t["ft_all"])}</h2><ul>'+''.join(items)+'</ul></nav>'
 TC='<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0b1d20" media="(prefers-color-scheme: dark)">'
 def head(l,title,canon,alts=True,css='/home.css',extra='',desc=None):
   a=''.join(f'<link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}">' for k in L)+f'<link rel="alternate" hreflang="x-default" href="{S}">' if alts else ''
@@ -45,11 +65,11 @@ for k,d in L.items():
    +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
    +f'<main id="main" tabindex="-1"><section class="hero wrap"><h1>{d["h1"]}</h1><p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
    +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
-   +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p></div></div></li>\n'
-   +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p></div></div></li>\n'
+   +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p>{pop_html(k,("heic",))}</div></div></li>\n'
+   +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p>{pop_html(k,("merge","split","jpg"))}</div></div></li>\n'
    +soon(d,d["c2"],d["c2d"],"comp")+soon(d,d["c3"],d["c3d"],"res")+'</ul></section>\n'
    +f'<section class="facts" aria-labelledby="f"><div class="wrap"><h2 id="f">{d["fh"]}</h2><ul>{facts}</ul></div></section></main>\n'
-   +f'<footer><div class="wrap"><span translate="no">NoClaudKit</span><p>{d["legal"]}</p></div></footer></body></html>\n')
+   +f'<footer><div class="wrap">{ft_html(k)}<p>{d["legal"]}</p></div></footer></body></html>\n')
   open(f'{D}/{d["p"]}index.html','w').write(h)
 x=L['en'];r=L['ru'];z=L['zh']
 langs404=''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}">{NAMES[k]}</a></li>' for k in L)
@@ -60,13 +80,16 @@ open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noc
 open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n<sitemap><loc>{S}pdf/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
 alts=''.join(f'<xhtml:link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}"/>' for k in L)+f'<xhtml:link rel="alternate" hreflang="x-default" href="{S}"/>'
 open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc>{alts}</url>\n' for k in L)+'</urlset>\n')
-# redirect stubs
-sm=open('/workspace/local-image-converter/sitemap.xml').read()
-old='https://swtormy-agents.github.io/local-image-converter/'
-paths=[re.sub(r'^https://(swtormy-agents\.github\.io/local-image-converter|noclaudkit\.com/image-converter)/','',u) for u in re.findall(r'<loc>([^<]*)',sm)]
-for p in paths:
-  f=f'{D}/local-image-converter/{p}'+('index.html' if p=='' or p.endswith('/') else '')
-  os.makedirs(os.path.dirname(f),exist_ok=True)
-  t=f'{S}image-converter/{p}'
-  open(f,'w').write(f'<!doctype html>\n<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta http-equiv="refresh" content="0; url={t}"><link rel="canonical" href="{t}"><title>Moved</title></head><body><p><a href="{t}">{t}</a></p></body></html>\n')
-print(len(paths))
+# redirect stubs (sitemap lives in the image-converter repo; skip when absent so rerun = zero diff)
+sm_path=os.path.join(D,'local-image-converter','sitemap.xml')
+if os.path.isfile(sm_path):
+  sm=open(sm_path).read()
+  paths=[re.sub(r'^https://(swtormy-agents\.github\.io/local-image-converter|noclaudkit\.com/image-converter)/','',u) for u in re.findall(r'<loc>([^<]*)',sm)]
+  for p in paths:
+    f=f'{D}/local-image-converter/{p}'+('index.html' if p=='' or p.endswith('/') else '')
+    os.makedirs(os.path.dirname(f),exist_ok=True)
+    t=f'{S}image-converter/{p}'
+    open(f,'w').write(f'<!doctype html>\n<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta http-equiv="refresh" content="0; url={t}"><link rel="canonical" href="{t}"><title>Moved</title></head><body><p><a href="{t}">{t}</a></p></body></html>\n')
+  print(len(paths))
+else:
+  print(0)
