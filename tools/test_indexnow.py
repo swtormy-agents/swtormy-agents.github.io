@@ -568,6 +568,168 @@ class RangeResolutionTests(unittest.TestCase):
             payload = json.loads(stdout.getvalue())
             self.assertEqual(payload["urlList"], ["https://noclaudkit.com/b/"])
 
+    def test_dispatch_before_env_covers_after_to_head_range(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stdout = io.StringIO()
+            env = {
+                "INDEXNOW_BEFORE": shas["c1"],
+                "INDEXNOW_AFTER": "",
+                "GITHUB_TOKEN": "test-token",
+                "GITHUB_REPOSITORY": "o/r",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(indexnow, "lookup_previous_successful_head") as lookup:
+                    with mock.patch.object(sys, "stdout", stdout):
+                        code = indexnow.main(["--dry-run", "--repo-root", str(tmp)])
+            self.assertEqual(code, 0)
+            lookup.assert_not_called()
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(
+                payload["urlList"],
+                ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
+            )
+
+    def test_explicit_before_rejects_non_hex_and_short_sha(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            self.assertTrue(indexnow.is_full_sha(shas["c1"]))
+            self.assertFalse(indexnow.is_full_sha(shas["c1"][:12]))
+            self.assertFalse(indexnow.is_full_sha("A" * 40))
+            self.assertFalse(indexnow.is_full_sha("g" * 40))
+            self.assertFalse(indexnow.is_full_sha(None))
+            self.assertFalse(indexnow.is_full_sha(""))
+            for bad in (shas["c1"][:12], "not-a-sha", "A" * 40, ""):
+                with self.assertRaises(indexnow.IndexNowError) as ctx:
+                    indexnow.validate_explicit_before(tmp, bad)
+                self.assertIn("40-character hex", str(ctx.exception))
+
+    def test_explicit_before_rejects_non_ancestor(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            run_git(tmp, "checkout", "--orphan", "other")
+            tmp.joinpath("orphan.txt").write_text("x\n", encoding="utf-8")
+            run_git(tmp, "add", "orphan.txt")
+            run_git(tmp, "commit", "-m", "orphan")
+            orphan = run_git(tmp, "rev-parse", "HEAD")
+            run_git(tmp, "checkout", "main")
+            self.assertTrue(indexnow.is_full_sha(orphan))
+            with self.assertRaises(indexnow.IndexNowError) as ctx:
+                indexnow.validate_explicit_before(tmp, orphan)
+            self.assertIn("not an ancestor of main", str(ctx.exception))
+            unknown = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+            with self.assertRaises(indexnow.IndexNowError) as ctx:
+                indexnow.validate_explicit_before(tmp, unknown)
+            self.assertIn("not an ancestor of main", str(ctx.exception))
+            self.assertEqual(indexnow.validate_explicit_before(tmp, shas["c1"]), shas["c1"])
+
+    def test_dispatch_does_not_fall_back_or_post_when_after_is_invalid(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            make_multicommit_repo(tmp)
+            stderr = io.StringIO()
+            env = {
+                "INDEXNOW_BEFORE": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+                "INDEXNOW_AFTER": "",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(sys, "stderr", stderr):
+                    with mock.patch.object(indexnow.urllib.request, "urlopen") as urlopen:
+                        code = indexnow.main(["--submit", "--repo-root", str(tmp)])
+            self.assertEqual(code, 1)
+            urlopen.assert_not_called()
+            self.assertIn("not an ancestor of main", stderr.getvalue())
+
+    def test_submit_still_posts_once_for_dispatch_range(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stderr = io.StringIO()
+
+            class Resp:
+                status = 202
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    return False
+
+                def read(self):
+                    return b""
+
+            env = {"INDEXNOW_BEFORE": shas["c1"], "INDEXNOW_AFTER": ""}
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(indexnow.urllib.request, "urlopen", return_value=Resp()) as urlopen:
+                    with mock.patch.object(sys, "stderr", stderr):
+                        code = indexnow.main(["--submit", "--repo-root", str(tmp)])
+            self.assertEqual(code, 0)
+            self.assertEqual(urlopen.call_count, 1)
+            sent = json.loads(urlopen.call_args[0][0].data.decode("utf-8"))
+            self.assertEqual(
+                sent["urlList"],
+                ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
+            )
+            self.assertEqual(stderr.getvalue().strip(), "status=202 url_count=2")
+
+
+class WorkflowFileTests(unittest.TestCase):
+    """Contract checks for .github/workflows/indexnow.yml (stdlib only)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.path = ROOT.parent / ".github/workflows/indexnow.yml"
+        cls.text = cls.path.read_text(encoding="utf-8")
+
+    def test_job_if_accepts_push_and_dynamic(self):
+        self.assertIn("github.event.workflow_run.event == 'push'", self.text)
+        self.assertIn("github.event.workflow_run.event == 'dynamic'", self.text)
+        self.assertIn("github.event.workflow_run.head_branch == 'main'", self.text)
+        self.assertIn("github.event.workflow_run.conclusion == 'success'", self.text)
+        self.assertIn("github.event_name == 'workflow_dispatch'", self.text)
+        exclusive_push = (
+            "github.event.workflow_run.event == 'push' &&\n"
+            "      github.event.workflow_run.head_branch == 'main'"
+        )
+        self.assertNotIn(exclusive_push, self.text)
+
+    def test_workflow_dispatch_requires_after_input(self):
+        self.assertRegex(
+            self.text,
+            r"workflow_dispatch:\n"
+            r"    inputs:\n"
+            r"      after:\n"
+            r"(?:        .+\n)*"
+            r"        required: true\n",
+        )
+        self.assertIn("type: string", self.text)
+
+    def test_after_input_passed_via_env_never_interpolated_into_run(self):
+        self.assertIn("INDEXNOW_BEFORE: ${{ inputs.after }}", self.text)
+        run_lines = [
+            line for line in self.text.splitlines() if line.lstrip().startswith("run:")
+        ]
+        self.assertEqual(run_lines, ["        run: python3 tools/indexnow.py --submit"])
+        for line in run_lines:
+            self.assertNotIn("${{", line)
+            self.assertNotIn("inputs.after", line)
+
+    def test_existing_security_guarantees(self):
+        self.assertIn("contents: read", self.text)
+        self.assertIn("actions: read", self.text)
+        self.assertNotRegex(self.text, r"contents:\s*write")
+        self.assertNotRegex(self.text, r"actions:\s*write")
+        self.assertIn(
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            self.text,
+        )
+        self.assertEqual(self.text.count("python3 tools/indexnow.py --submit"), 1)
+        self.assertIn("INDEXNOW_AFTER: ${{ github.event.workflow_run.head_sha }}", self.text)
+        self.assertNotIn("secrets.INDEXNOW", self.text)
+
 
 class LiveRepoTests(unittest.TestCase):
     """Sanity checks against this repository's real sitemap (no network)."""
