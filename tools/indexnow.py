@@ -201,7 +201,7 @@ def previous_successful_workflow_head(
     """Return head_sha of the last successful IndexNow workflow run on main."""
     url = (
         f"{GITHUB_API}/repos/{repo}/actions/workflows/{workflow_file}/runs"
-        f"?branch={branch}&status=success&per_page=20"
+        f"?branch={branch}&status=success&event=workflow_run&per_page=20"
     )
     try:
         data = github_get_json(url, token)
@@ -211,7 +211,9 @@ def previous_successful_workflow_head(
     for run in data.get("workflow_runs") or []:
         if exclude and str(run.get("id")) == exclude:
             continue
-        if run.get("conclusion") not in (None, "success"):
+        if run.get("event") != "workflow_run":
+            continue
+        if run.get("conclusion") != "success":
             continue
         head = run.get("head_sha")
         if head:
@@ -264,7 +266,7 @@ def build_payload(host: str, key: str, key_location: str, url_list: list[str]) -
     }
 
 
-def submit(payload: dict) -> int:
+def submit(payload: dict) -> int | str:
     request = urllib.request.Request(
         INDEXNOW_ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
@@ -276,9 +278,11 @@ def submit(payload: dict) -> int:
             return int(response.status)
     except urllib.error.HTTPError as exc:
         return int(exc.code)
+    except (urllib.error.URLError, TimeoutError):
+        return "error"
 
 
-def log_status(status: int | None, url_count: int) -> None:
+def log_status(status: int | str | None, url_count: int) -> None:
     if status is None:
         print(f"status=skipped url_count={url_count}", file=sys.stderr)
     else:
@@ -312,7 +316,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="POST once to IndexNow; logs HTTP status and URL count only",
     )
     parser.add_argument("--before", help="git SHA for the start of the pushed range")
-    parser.add_argument("--after", help="git SHA for the end of the pushed range")
+    parser.add_argument(
+        "--after",
+        default=os.environ.get("INDEXNOW_AFTER") or None,
+        help="git SHA for the end of the pushed range (or INDEXNOW_AFTER)",
+    )
     parser.add_argument(
         "--files",
         nargs="*",
@@ -342,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     status = submit(payload)
     log_status(status, len(url_list))
-    return 0 if 200 <= status < 300 else 1
+    return 0 if isinstance(status, int) and 200 <= status < 300 else 1
 
 
 if __name__ == "__main__":

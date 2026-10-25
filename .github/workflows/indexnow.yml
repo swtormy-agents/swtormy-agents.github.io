@@ -31,4 +31,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-        run: python3 tools/indexnow.py --submit --after "${{ github.event.workflow_run.head_sha }}"
+          INDEXNOW_AFTER: ${{ github.event.workflow_run.head_sha }}
+        run: python3 tools/indexnow.py --submit

@@ -275,6 +275,26 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertEqual(stderr.getvalue().strip(), "status=403 url_count=3")
 
+    def test_submit_urlerror_logs_status_only_and_does_not_leak_key(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = write_repo(Path(raw))
+            stderr = io.StringIO()
+            stdout = io.StringIO()
+            leak = urllib.error.URLError(f"connection failed key={FAKE_KEY} body=secret")
+            with mock.patch.object(indexnow.urllib.request, "urlopen", side_effect=leak):
+                with mock.patch.object(sys, "stderr", stderr), mock.patch.object(sys, "stdout", stdout):
+                    code = indexnow.main(
+                        ["--submit", "--repo-root", str(tmp), "--files", "index.html"]
+                    )
+            self.assertEqual(code, 1)
+            logged = stderr.getvalue()
+            printed = stdout.getvalue()
+            self.assertEqual(logged.strip(), "status=error url_count=3")
+            self.assertNotIn(FAKE_KEY, logged)
+            self.assertNotIn(FAKE_KEY, printed)
+            self.assertNotIn("connection failed", logged)
+            self.assertNotIn("secret", logged)
+
 
 INDEPENDENT_URLSET = """<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -373,8 +393,18 @@ class RangeResolutionTests(unittest.TestCase):
     def test_lookup_skips_current_run_and_returns_previous_head(self):
         payload = {
             "workflow_runs": [
-                {"id": 99, "conclusion": "success", "head_sha": "aaa111"},
-                {"id": 88, "conclusion": "success", "head_sha": "bbb222"},
+                {
+                    "id": 99,
+                    "event": "workflow_run",
+                    "conclusion": "success",
+                    "head_sha": "aaa111",
+                },
+                {
+                    "id": 88,
+                    "event": "workflow_run",
+                    "conclusion": "success",
+                    "head_sha": "bbb222",
+                },
             ]
         }
         with mock.patch.object(indexnow, "github_get_json", return_value=payload) as get_json:
@@ -386,6 +416,50 @@ class RangeResolutionTests(unittest.TestCase):
         self.assertIn("/repos/o/r/actions/workflows/indexnow.yml/runs", url)
         self.assertIn("branch=main", url)
         self.assertIn("status=success", url)
+        self.assertIn("event=workflow_run", url)
+
+    def test_lookup_requires_workflow_run_event_and_success_conclusion(self):
+        payload = {
+            "workflow_runs": [
+                {
+                    "id": 1,
+                    "event": "push",
+                    "conclusion": "success",
+                    "head_sha": "from-push",
+                },
+                {
+                    "id": 2,
+                    "event": "workflow_run",
+                    "conclusion": None,
+                    "head_sha": "from-none",
+                },
+                {
+                    "id": 3,
+                    "event": "workflow_run",
+                    "conclusion": "failure",
+                    "head_sha": "from-fail",
+                },
+                {
+                    "id": 4,
+                    "event": "workflow_run",
+                    "conclusion": "success",
+                    "head_sha": "from-ok",
+                },
+            ]
+        }
+        with mock.patch.object(indexnow, "github_get_json", return_value=payload):
+            self.assertEqual(
+                indexnow.previous_successful_workflow_head("o/r", "token"),
+                "from-ok",
+            )
+        empty_or_invalid = {
+            "workflow_runs": [
+                {"id": 1, "event": "push", "conclusion": "success", "head_sha": "x"},
+                {"id": 2, "event": "workflow_run", "conclusion": None, "head_sha": "y"},
+            ]
+        }
+        with mock.patch.object(indexnow, "github_get_json", return_value=empty_or_invalid):
+            self.assertIsNone(indexnow.previous_successful_workflow_head("o/r", "token"))
 
     def test_lookup_returns_none_when_api_empty_or_fails(self):
         with mock.patch.object(indexnow, "github_get_json", return_value={"workflow_runs": []}):
@@ -475,6 +549,24 @@ class RangeResolutionTests(unittest.TestCase):
                 ["https://noclaudkit.com/a/", "https://noclaudkit.com/b/"],
             )
             self.assertEqual(stderr.getvalue().strip(), "status=202 url_count=2")
+
+    def test_after_sha_can_come_from_indexnow_after_env(self):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            shas = make_multicommit_repo(tmp)
+            stdout = io.StringIO()
+            env = {
+                "INDEXNOW_AFTER": shas["c3"],
+                "GITHUB_TOKEN": "",
+                "GITHUB_REPOSITORY": "",
+            }
+            with mock.patch.dict(os.environ, env, clear=False):
+                with mock.patch.object(indexnow, "lookup_previous_successful_head", return_value=None):
+                    with mock.patch.object(sys, "stdout", stdout):
+                        code = indexnow.main(["--dry-run", "--repo-root", str(tmp)])
+            self.assertEqual(code, 0)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["urlList"], ["https://noclaudkit.com/b/"])
 
 
 class LiveRepoTests(unittest.TestCase):
