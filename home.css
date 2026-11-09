@@ -33,6 +33,7 @@ h2{font-size:1.25rem;margin:0 0 16px}
 .editorial p:last-child{margin-bottom:0}
 .editorial ul,.editorial ol{margin:0 0 1.1em;padding-left:1.25em;max-width:42em}
 .editorial a{text-decoration:underline;overflow-wrap:anywhere}
+@media (max-width:280px){html{overflow-x:clip}.editorial p{max-width:100%}.editorial a{word-break:break-all}}
 .grid{list-style:none;margin:0;padding:0;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr))}
 .card{position:relative;display:flex;gap:16px;align-items:flex-start;height:100%;padding:20px;background:var(--card);border:1px solid var(--border);border-radius:14px}
 .card .ico{flex:none;width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}

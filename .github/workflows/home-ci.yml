@@ -24,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install Playwright
-        run: pip install playwright && python -m playwright install chromium
+        run: pip install 'playwright==1.65.0' && python -m playwright install chromium
       - name: Regenerate home pages
         run: python3 tools/genhome.py
       - name: Assert generator is idempotent
