@@ -1,4 +1,4 @@
-import json,os,re
+import json,os,re,subprocess
 D=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); S='https://noclaudkit.com/'
 CSP="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="currentColor"/><path d="M8 19V9l12 10V9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -29,17 +29,28 @@ IL=json.load(open(f'{D}/tools/i18n/interlink.json',encoding='utf-8'))
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
 FT_KEYS=('home','conv','pdf','heic','merge','split','jpg')
 FT_LABEL={'home':'ft_home','conv':'f_conv','pdf':'f_pdf','heic':'ft_heic','merge':'ft_merge','split':'ft_split','jpg':'ft_jpg'}
+POP_CONV=[('heic-to-jpg.html','ft_heic'),('heic-to-png.html','ft_heic_png'),('webp-to-png.html','ft_webp_png'),('webp-to-jpg.html','ft_webp_jpg'),('avif-to-jpg.html','ft_avif_jpg'),('avif-to-png.html','ft_avif_png'),('png-to-webp.html','ft_png_webp'),('jpg-to-webp.html','ft_jpg_webp')]
+POP_PDF=[('merge-pdf.html','ft_merge'),('split-pdf.html','ft_split'),('organize-pdf.html','ft_organize'),('jpg-to-pdf.html','ft_jpg')]
 def loc(l): return '' if l=='en' else l+'/'
 def vis(l,s): return nb(s) if l=='ru' else s
+def tool_href(l,section,slug):
+  return f'/{section}/{loc(l)}{slug}'
 def ft_href(l,key):
   p=loc(l)
   return {'home':f'/{p}','conv':f'/image-converter/{p}','pdf':f'/pdf/{p}',
           'heic':f'/image-converter/{p}heic-to-jpg.html',
           'merge':f'/pdf/{p}merge-pdf.html','split':f'/pdf/{p}split-pdf.html',
           'jpg':f'/pdf/{p}jpg-to-pdf.html'}[key]
-def pop_html(l,keys):
+def pop_html(l,pairs,section):
   t=IL[l]
-  return '<ul class="pop">'+''.join(f'<li><a href="{ft_href(l,k)}">{vis(l,t[FT_LABEL[k]])}</a></li>' for k in keys)+'</ul>'
+  return '<ul class="pop">'+''.join(f'<li><a href="{tool_href(l,section,slug)}">{vis(l,t[ilkey])}</a></li>' for slug,ilkey in pairs)+'</ul>'
+def git_lastmod(rel):
+  r=subprocess.run(['git','log','-1','--format=%cs','--',rel],capture_output=True,text=True,cwd=D)
+  return r.stdout.strip()
+def home_lastmod(l):
+  rel='index.html' if not L[l]['p'] else f'{L[l]["p"]}index.html'
+  d=git_lastmod(rel)
+  return d if d else git_lastmod('tools/genhome.py')
 def ft_html(l):
   t=IL[l]; items=[]
   for key in FT_KEYS:
@@ -65,8 +76,8 @@ for k,d in L.items():
    +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
    +f'<main id="main" tabindex="-1"><section class="hero wrap"><h1>{d["h1"]}</h1><p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
    +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
-   +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p>{pop_html(k,("heic",))}</div></div></li>\n'
-   +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p>{pop_html(k,("merge","split","jpg"))}</div></div></li>\n'
+   +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p>{pop_html(k,POP_CONV,"image-converter")}</div></div></li>\n'
+   +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p>{pop_html(k,POP_PDF,"pdf")}</div></div></li>\n'
    +soon(d,d["c2"],d["c2d"],"comp")+soon(d,d["c3"],d["c3d"],"res")+'</ul></section>\n'
    +f'<section class="facts" aria-labelledby="f"><div class="wrap"><h2 id="f">{d["fh"]}</h2><ul>{facts}</ul></div></section></main>\n'
    +f'<footer><div class="wrap">{ft_html(k)}<p>{d["legal"]}</p></div></footer></body></html>\n')
@@ -79,7 +90,7 @@ open(f'{D}/.nojekyll','w').write('')
 open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noclaudkit.com/sitemap.xml\n')
 open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n<sitemap><loc>{S}pdf/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
 alts=''.join(f'<xhtml:link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}"/>' for k in L)+f'<xhtml:link rel="alternate" hreflang="x-default" href="{S}"/>'
-open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc>{alts}</url>\n' for k in L)+'</urlset>\n')
+open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc><lastmod>{home_lastmod(k)}</lastmod>{alts}</url>\n' for k in L)+'</urlset>\n')
 # redirect stubs (sitemap lives in the image-converter repo; skip when absent so rerun = zero diff)
 sm_path=os.path.join(D,'local-image-converter','sitemap.xml')
 if os.path.isfile(sm_path):
