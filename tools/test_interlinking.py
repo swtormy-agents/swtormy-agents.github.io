@@ -240,6 +240,7 @@ def ac5():
     for lang in LANGS:
         s = load(lang)
         body = re.sub(r'<script[^>]*>.*?</script>', '', s, flags=re.S)
+        body = re.sub(r'<section class="editorial[^"]*">.*?</section>', '', body, flags=re.S)
         texts = []
         for tag, inner in each_anchor(body):
             t = norm(re.sub(r'<[^>]+>', '', inner))
@@ -346,13 +347,47 @@ def ac9():
         ok(9, 'canonical + hreflang byte-identical to the pre-interlinking scheme')
 
 
+def ac_seo():
+    bad = []
+    seo = json.load(open('tools/i18n/home-seo.json', encoding='utf-8'))
+    for lang in LANGS:
+        s = load(lang)
+        home = seo[lang]['home']
+        if f'<title>{html.escape(home["title"], quote=True)}</title>' not in s:
+            bad.append(f'{lang}: title does not match home-seo.json')
+        if f'content="{html.escape(home["desc"], quote=True)}"' not in s:
+            bad.append(f'{lang}: meta description does not match home-seo.json')
+        h1 = re.search(r'<section class="hero[^"]*">\s*<h1>(.*?)</h1>', s, re.S)
+        want_h1 = nb_ru(home['h1']) if lang == 'ru' else home['h1']
+        got = html.unescape(h1.group(1)) if h1 else None
+        if norm(got) != norm(want_h1):
+            bad.append(f'{lang}: h1 {norm(got)!r} != {norm(want_h1)!r}')
+        if '<section class="editorial wrap">' not in s:
+            bad.append(f'{lang}: missing editorial section')
+        if home['editorial_html'] not in s and (lang != 'ru' or nb_ru(home['editorial_html']) not in s):
+            bad.append(f'{lang}: editorial_html not embedded verbatim')
+    if bad:
+        for b in bad:
+            fail('seo', b)
+    else:
+        ok('seo', 'title, desc, h1, editorial from tools/i18n/home-seo.json')
+
+
+def nb_ru(t):
+    sw = 'не и с в на к о у а из за по от до'.split()
+    pat = re.compile(r'(?<![\w\u0400-\u04FF])(' + '|'.join(sw) + r') (?=\S)', re.I)
+    return pat.sub(lambda m: m.group(1) + NB, t)
+
+
 def extras():
     bad = []
     il = json.load(open('tools/i18n/interlink.json', encoding='utf-8'))
     for lang in LANGS:
         s = load(lang)
-        if 'PDF-инструменты' in s.replace('\u2011', '-'):
-            bad.append(f'{lang}: PDF-инструменты still present')
+        body = re.search(r'<body\b[^>]*>(.*)</body>', s, re.S)
+        vis = body.group(1) if body else s
+        if 'PDF-инструменты' in vis.replace('\u2011', '-'):
+            bad.append(f'{lang}: PDF-инструменты still present in visible body')
         if re.search(r'\sstyle=', s):
             bad.append(f'{lang}: inline style=')
         scripts = re.findall(r'<script\b([^>]*)>', s)
@@ -394,6 +429,7 @@ def main():
     ac8()
     ac_home_sitemap()
     ac9()
+    ac_seo()
     extras()
     print(f'\n{len(FAILS)} failed')
     sys.exit(1 if FAILS else 0)
