@@ -4,6 +4,7 @@ D=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); S='https://noclau
 SEO_PATH=f'{D}/tools/i18n/home-seo.json'
 SEO_FIELDS=('title','desc','h1','editorial_html')
 PH_RE=re.compile(r'\b(?:TODO|lorem|placeholder|TBD)\b',re.I)
+FORBIDDEN_MARKUP_RE=re.compile(r'<[?!]',re.I)
 ALLOWED_ED_TAGS=frozenset('p ul ol li strong em a'.split())
 ROOT_TAGS=frozenset('p ul ol'.split())
 INLINE_TAGS=frozenset('a strong em'.split())
@@ -66,10 +67,15 @@ class _EdGuard(HTMLParser):
       self.err.append(f'mismatched end tag </{t}>'); return
     self.stack.pop()
   def handle_startendtag(self,tag,attrs): self.handle_starttag(tag,attrs)
+  def handle_comment(self,data): self.err.append('comments not allowed')
+  def handle_decl(self,decl): self.err.append(f'declaration not allowed: {decl!r}')
+  def handle_pi(self,data): self.err.append(f'processing instruction not allowed: {data!r}')
+  def unknown_decl(self,data): self.err.append(f'unknown declaration not allowed: {data!r}')
   def close(self):
     super().close()
     if self.stack: self.err.append('unclosed tags: '+', '.join(self.stack))
 def validate_editorial_html(html):
+  if FORBIDDEN_MARKUP_RE.search(html): return ['forbidden markup (<! or <?)']
   g=_EdGuard(); g.feed(html); g.close(); return g.err
 def load_seo():
   seo=json.load(open(SEO_PATH,encoding='utf-8'))

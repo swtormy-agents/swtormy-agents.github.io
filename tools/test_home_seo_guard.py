@@ -30,7 +30,8 @@ class EditorialGuardTests(unittest.TestCase):
     self.assertTrue(err, f'expected rejection for {html!r}')
 
   def test_real_home_seo_passes(self):
-    seo = json.load(open(SEO_PATH, encoding='utf-8'))
+    with open(SEO_PATH, encoding='utf-8') as f:
+      seo = json.load(f)
     for lang in ('en', 'ru', 'zh'):
       with self.subTest(lang=lang):
         err = gh.validate_editorial_html(seo[lang]['home']['editorial_html'])
@@ -69,6 +70,20 @@ class EditorialGuardTests(unittest.TestCase):
 
   def test_unallowed_tag(self):
     self.assert_rejects('<p><img src="/x"></p>')
+
+  def test_cdata_bypass_rejected(self):
+    self.assert_rejects(
+      '<![CDATA[ x > <a href="//evil.com">x</a> <p hidden>y]]>',
+    )
+
+  def test_comment_bypass_ending_rejected(self):
+    self.assert_rejects('<!-- x --!> <a href="//evil.com">')
+
+  def test_processing_instruction_rejected(self):
+    self.assert_rejects('<?pi?><p>x</p>')
+
+  def test_doctype_rejected(self):
+    self.assert_rejects('<!DOCTYPE html><p>x</p>')
 
 
 class EscapeTests(unittest.TestCase):
