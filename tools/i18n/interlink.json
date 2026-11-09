@@ -5,8 +5,16 @@
   "ft_home": "NoClaudKit",
   "ft_all": "All tools",
   "ft_heic": "HEIC to JPG",
+  "ft_heic_png": "HEIC to PNG",
+  "ft_webp_png": "WebP to PNG",
+  "ft_webp_jpg": "WebP to JPG",
+  "ft_avif_jpg": "AVIF to JPG",
+  "ft_avif_png": "AVIF to PNG",
+  "ft_png_webp": "PNG to WebP",
+  "ft_jpg_webp": "JPG to WebP",
   "ft_merge": "Merge PDF",
   "ft_split": "Split PDF",
+  "ft_organize": "Reorder pages",
   "ft_jpg": "JPG to PDF"
  },
  "ru": {
@@ -15,8 +23,16 @@
   "ft_home": "NoClaudKit",
   "ft_all": "Все инструменты",
   "ft_heic": "HEIC в JPG",
+  "ft_heic_png": "HEIC в PNG",
+  "ft_webp_png": "WebP в PNG",
+  "ft_webp_jpg": "WebP в JPG",
+  "ft_avif_jpg": "AVIF в JPG",
+  "ft_avif_png": "AVIF в PNG",
+  "ft_png_webp": "PNG в WebP",
+  "ft_jpg_webp": "JPG в WebP",
   "ft_merge": "Объединить PDF",
   "ft_split": "Разделить PDF",
+  "ft_organize": "Упорядочить страницы",
   "ft_jpg": "JPG в PDF"
  },
  "zh": {
@@ -25,8 +41,16 @@
   "ft_home": "NoClaudKit",
   "ft_all": "全部工具",
   "ft_heic": "HEIC 转 JPG",
+  "ft_heic_png": "HEIC 转 PNG",
+  "ft_webp_png": "WebP 转 PNG",
+  "ft_webp_jpg": "WebP 转 JPG",
+  "ft_avif_jpg": "AVIF 转 JPG",
+  "ft_avif_png": "AVIF 转 PNG",
+  "ft_png_webp": "PNG 转 WebP",
+  "ft_jpg_webp": "JPG 转 WebP",
   "ft_merge": "合并 PDF",
   "ft_split": "拆分 PDF",
+  "ft_organize": "页面排序",
   "ft_jpg": "图片转 PDF"
  }
 }

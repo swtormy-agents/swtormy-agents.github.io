@@ -41,20 +41,35 @@ FT_LABELS = {
     'ru': ['NoClaudKit', 'Конвертер изображений', 'Инструменты для PDF', 'HEIC в JPG', 'Объединить PDF', 'Разделить PDF', 'JPG в PDF'],
     'zh': ['NoClaudKit', '图片转换器', 'PDF 工具', 'HEIC 转 JPG', '合并 PDF', '拆分 PDF', '图片转 PDF'],
 }
-POP = {
-    'en': [('/image-converter/heic-to-jpg.html', 'HEIC to JPG'),
-           ('/pdf/merge-pdf.html', 'Merge PDF'),
-           ('/pdf/split-pdf.html', 'Split PDF'),
-           ('/pdf/jpg-to-pdf.html', 'JPG to PDF')],
-    'ru': [('/image-converter/ru/heic-to-jpg.html', 'HEIC в JPG'),
-           ('/pdf/ru/merge-pdf.html', 'Объединить PDF'),
-           ('/pdf/ru/split-pdf.html', 'Разделить PDF'),
-           ('/pdf/ru/jpg-to-pdf.html', 'JPG в PDF')],
-    'zh': [('/image-converter/zh/heic-to-jpg.html', 'HEIC 转 JPG'),
-           ('/pdf/zh/merge-pdf.html', '合并 PDF'),
-           ('/pdf/zh/split-pdf.html', '拆分 PDF'),
-           ('/pdf/zh/jpg-to-pdf.html', '图片转 PDF')],
-}
+POP_CONV = [
+    ('heic-to-jpg.html', 'ft_heic'),
+    ('heic-to-png.html', 'ft_heic_png'),
+    ('webp-to-png.html', 'ft_webp_png'),
+    ('webp-to-jpg.html', 'ft_webp_jpg'),
+    ('avif-to-jpg.html', 'ft_avif_jpg'),
+    ('avif-to-png.html', 'ft_avif_png'),
+    ('png-to-webp.html', 'ft_png_webp'),
+    ('jpg-to-webp.html', 'ft_jpg_webp'),
+]
+POP_PDF = [
+    ('merge-pdf.html', 'ft_merge'),
+    ('split-pdf.html', 'ft_split'),
+    ('organize-pdf.html', 'ft_organize'),
+    ('jpg-to-pdf.html', 'ft_jpg'),
+]
+
+
+def loc_prefix(lang):
+    return '' if lang == 'en' else f'{lang}/'
+
+
+def expected_pop(lang, il):
+    pairs = []
+    for slug, key in POP_CONV:
+        pairs.append((f'/image-converter/{loc_prefix(lang)}{slug}', norm(il[lang][key])))
+    for slug, key in POP_PDF:
+        pairs.append((f'/pdf/{loc_prefix(lang)}{slug}', norm(il[lang][key])))
+    return pairs
 CANON = {
     'en': 'https://noclaudkit.com/',
     'ru': 'https://noclaudkit.com/ru/',
@@ -162,6 +177,7 @@ def ac1():
 
 def ac2():
     bad = []
+    il = json.load(open('tools/i18n/interlink.json', encoding='utf-8'))
     for lang in LANGS:
         s = load(lang)
         pops = re.findall(r'<ul class="pop">(.*?)</ul>', s, re.S)
@@ -172,10 +188,11 @@ def ac2():
         for block in pops:
             for m in re.finditer(r'<a href="([^"]*)">(.*?)</a>', block, re.S):
                 pairs.append((m.group(1), norm(m.group(2))))
-        if pairs != POP[lang]:
+        want = expected_pop(lang, il)
+        if pairs != want:
             bad.append(f'{lang}: Popular links {pairs}')
-        if 'webp-to-png' in s:
-            bad.append(f'{lang}: webp-to-png must not appear')
+        if len(pairs) != len(POP_CONV) + len(POP_PDF):
+            bad.append(f'{lang}: expected {len(POP_CONV) + len(POP_PDF)} tool links, got {len(pairs)}')
         soon = re.findall(r'<div class="card soon">(.*?)</div></li>', s, re.S)
         if len(soon) != 2:
             bad.append(f'{lang}: expected 2 coming-soon cards, got {len(soon)}')
@@ -186,7 +203,7 @@ def ac2():
         for b in bad:
             fail(2, b)
     else:
-        ok(2, 'home en/ru/zh Popular links to same-language heic/merge/split/jpg-to-pdf; no webp-to-png')
+        ok(2, 'home en/ru/zh list all image-converter pairs and PDF tools in Popular sections')
 
 
 def ac4():
@@ -281,6 +298,34 @@ def ac8():
         ok(8, 'generator rerun = zero diff')
 
 
+def ac_home_sitemap():
+    bad = []
+    sm = open('sitemap-home.xml', encoding='utf-8').read()
+    for lang in LANGS:
+        loc = CANON[lang]
+        if f'<loc>{loc}</loc>' not in sm:
+            bad.append(f'{lang}: home URL missing from sitemap-home.xml')
+        chunk = re.search(re.escape(loc) + r'</loc>(.*?)</url>', sm, re.S)
+        if not chunk or '<lastmod>' not in chunk.group(1):
+            bad.append(f'{lang}: missing lastmod for {loc}')
+        elif not re.search(r'<lastmod>\d{4}-\d{2}-\d{2}</lastmod>', chunk.group(1)):
+            bad.append(f'{lang}: bad lastmod format')
+    rel = {'en': 'index.html', 'ru': 'ru/index.html', 'zh': 'zh/index.html'}
+    for lang, path in rel.items():
+        r = subprocess.run(
+            ['git', 'log', '-1', '--format=%cs', '--', path],
+            capture_output=True, text=True, cwd=ROOT,
+        )
+        want = r.stdout.strip()
+        if want and f'<loc>{CANON[lang]}</loc><lastmod>{want}</lastmod>' not in sm:
+            bad.append(f'{lang}: lastmod != git log for {path} ({want})')
+    if bad:
+        for b in bad:
+            fail('sm', b)
+    else:
+        ok('sm', 'sitemap-home.xml has git-derived lastmod per home page')
+
+
 def ac9():
     bad = []
     for lang in LANGS:
@@ -347,6 +392,7 @@ def main():
     print('SKIP AC6: breadcrumbs + JSON-LD are not on home pages (spec §3.1)')
     ac7()
     ac8()
+    ac_home_sitemap()
     ac9()
     extras()
     print(f'\n{len(FAILS)} failed')
