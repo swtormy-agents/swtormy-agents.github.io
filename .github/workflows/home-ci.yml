@@ -1,0 +1,39 @@
+name: Home generator CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: genhome + home tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318c0637f7b7d7ad957bcd27f10 # v5.3.0
+        with:
+          python-version: '3.12'
+      - name: Install Playwright
+        run: pip install playwright && python -m playwright install chromium
+      - name: Regenerate home pages
+        run: python3 tools/genhome.py
+      - name: Assert generator is idempotent
+        run: git diff --exit-code
+      - name: test_interlinking.py
+        run: python3 tools/test_interlinking.py
+      - name: test_home_seo_guard.py
+        run: python3 tools/test_home_seo_guard.py
+      - name: test_indexnow.py
+        run: python3 tools/test_indexnow.py
+      - name: test_layout.py
+        run: python3 tools/test_layout.py

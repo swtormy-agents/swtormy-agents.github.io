@@ -359,9 +359,9 @@ def ac_seo():
             bad.append(f'{lang}: meta description does not match home-seo.json')
         h1 = re.search(r'<section class="hero[^"]*">\s*<h1>(.*?)</h1>', s, re.S)
         want_h1 = nb_ru(home['h1']) if lang == 'ru' else home['h1']
-        got = norm(h1.group(1)) if h1 else None
-        if got != norm(want_h1):
-            bad.append(f'{lang}: h1 {got!r} != {norm(want_h1)!r}')
+        got = html.unescape(h1.group(1)) if h1 else None
+        if norm(got) != norm(want_h1):
+            bad.append(f'{lang}: h1 {norm(got)!r} != {norm(want_h1)!r}')
         if '<section class="editorial wrap">' not in s:
             bad.append(f'{lang}: missing editorial section')
         if home['editorial_html'] not in s and (lang != 'ru' or nb_ru(home['editorial_html']) not in s):

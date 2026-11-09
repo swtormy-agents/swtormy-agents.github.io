@@ -5,7 +5,19 @@ SEO_PATH=f'{D}/tools/i18n/home-seo.json'
 SEO_FIELDS=('title','desc','h1','editorial_html')
 PH_RE=re.compile(r'\b(?:TODO|lorem|placeholder|TBD)\b',re.I)
 ALLOWED_ED_TAGS=frozenset('p ul ol li strong em a'.split())
+ROOT_TAGS=frozenset('p ul ol'.split())
+INLINE_TAGS=frozenset('a strong em'.split())
+ALLOWED_CHILD={None:ROOT_TAGS,'p':INLINE_TAGS,'ul':frozenset('li'),'ol':frozenset('li'),
+  'li':ROOT_TAGS|INLINE_TAGS,'strong':INLINE_TAGS,'em':INLINE_TAGS,'a':frozenset(('strong','em'))}
+REL_HREF_RE=re.compile(r'^/[a-z0-9\-/._#]*$')
 def esc(s): return htmlmod.escape(s,quote=True)
+def hero_h1(s): return f'<h1>{esc(s)}</h1>'
+def valid_rel_href(raw):
+  h=htmlmod.unescape(raw)
+  if not h.startswith('/') or h.startswith('//') or '\\' in h: return False
+  if any(ord(c)<32 or c.isspace() for c in h): return False
+  if ':' in h[1:]: return False
+  return bool(REL_HREF_RE.match(h))
 CSP="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
 I={'logo':'<svg viewBox="0 0 28 28" aria-hidden="true"><rect x="1" y="1" width="26" height="26" rx="7" fill="currentColor"/><path d="M8 19V9l12 10V9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 'conv':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="11" height="11" rx="2"/><path d="m3 12 3-3 4 4"/><path d="M17 9h3v11H9v-3"/><path d="m15 18 2 2 2-2"/></svg>',
@@ -32,16 +44,33 @@ def fix(v):
   return v
 L['ru']={k:(fix(v) if k not in('p','hl','conv','og','pdf') else v) for k,v in L['ru'].items()}
 class _EdGuard(HTMLParser):
-  def __init__(self): super().__init__(); self.err=[]
+  def __init__(self): super().__init__(); self.err=[]; self.stack=[]
+  def _parent(self): return self.stack[-1] if self.stack else None
   def handle_starttag(self,tag,attrs):
     t=tag.lower()
     if t not in ALLOWED_ED_TAGS: self.err.append(f'unallowed tag <{t}>'); return
-    if t=='a':
-      if len(attrs)!=1 or attrs[0][0].lower()!='href': self.err.append('a must have only href')
-      else:
-        h=attrs[0][1]
-        if not h.startswith('/') or h.startswith('//'): self.err.append(f'a href must be relative path: {h!r}')
+    if attrs:
+      if t=='a':
+        if len(attrs)!=1 or attrs[0][0].lower()!='href': self.err.append('a must have only href attribute')
+        elif not valid_rel_href(attrs[0][1]): self.err.append(f'a href not allowed: {attrs[0][1]!r}')
+      else: self.err.append(f'<{t}> must not have attributes')
+    elif t=='a': self.err.append('a without href')
+    par=self._parent()
+    allowed=ALLOWED_CHILD[None] if par is None else ALLOWED_CHILD.get(par)
+    if allowed is None or t not in allowed: self.err.append(f'<{t}> not allowed inside <{par}>')
+    self.stack.append(t)
+  def handle_endtag(self,tag):
+    t=tag.lower()
+    if t not in ALLOWED_ED_TAGS: self.err.append(f'unallowed end tag </{t}>'); return
+    if not self.stack or self.stack[-1]!=t:
+      self.err.append(f'mismatched end tag </{t}>'); return
+    self.stack.pop()
   def handle_startendtag(self,tag,attrs): self.handle_starttag(tag,attrs)
+  def close(self):
+    super().close()
+    if self.stack: self.err.append('unclosed tags: '+', '.join(self.stack))
+def validate_editorial_html(html):
+  g=_EdGuard(); g.feed(html); g.close(); return g.err
 def load_seo():
   seo=json.load(open(SEO_PATH,encoding='utf-8'))
   for lang in L:
@@ -51,13 +80,12 @@ def load_seo():
       v=home.get(f)
       if v is None or (isinstance(v,str) and not v.strip()): sys.exit(f'genhome: {lang}.home.{f} missing or empty')
       if PH_RE.search(str(v)): sys.exit(f'genhome: {lang}.home.{f} contains placeholder marker')
-    g=_EdGuard(); g.feed(home['editorial_html']); g.close()
-    if g.err: sys.exit(f'genhome: {lang}.home.editorial_html invalid: {"; ".join(g.err)}')
+    err=validate_editorial_html(home['editorial_html'])
+    if err: sys.exit(f'genhome: {lang}.home.editorial_html invalid: {"; ".join(err)}')
     L[lang]['title']=home['title']
     L[lang]['desc']=home['desc']
     L[lang]['h1']=nb(home['h1']) if lang=='ru' else home['h1']
     L[lang]['editorial_html']=nb(home['editorial_html']) if lang=='ru' else home['editorial_html']
-load_seo()
 IL=json.load(open(f'{D}/tools/i18n/interlink.json',encoding='utf-8'))
 NAMES={'en':'English','ru':'Русский','zh':'中文'}
 FT_KEYS=('home','conv','pdf','heic','merge','split','jpg')
@@ -95,7 +123,6 @@ def git_lastmod(rel):
 def home_lastmod(l):
   rel='index.html' if not L[l]['p'] else f'{L[l]["p"]}index.html'
   return git_lastmod(rel)
-ensure_git_history()
 def ft_html(l):
   t=IL[l]; items=[]
   for key in FT_KEYS:
@@ -112,46 +139,49 @@ def nav(l):
   return '<nav aria-label="Language"><ul>'+''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}"'+(' aria-current="page"' if k==l else '')+f'>{NAMES[k]}</a></li>' for k in L)+'</ul></nav>'
 # Counsel condition: "Coming soon" cards have NO links (no <a>, no href, no tabindex)
 def soon(d,t,ds,ic): return f'<li><div class="card soon"><span class="ico">{I[ic]}</span><div><h3>{t}</h3><p>{ds}</p><span class="tag">{d["soon"]}</span></div></div></li>'
-for k,d in L.items():
-  os.makedirs(f'{D}/{d["p"]}',exist_ok=True)
-  mt=f'<div class="mt" role="note"><div class="wrap"><span>{d["mt"]}</span><a href="/" lang="en" hreflang="en">Read in English</a></div></div>' if d['mt'] else ''
-  langs=''.join(f'<li><a href="/{L[kk]["p"]}" lang="{L[kk]["hl"]}" hreflang="{L[kk]["hl"]}"'+(' aria-current="page"' if kk==k else '')+f'>{NAMES[kk]}</a></li>' for kk in L)
-  facts=''.join(f'<li>{I[ic]}<div><strong>{a}</strong><span>{b}</span></div></li>' for ic,(a,b) in zip('buf',d['f']))
-  og=(f'<meta property="og:type" content="website"><meta property="og:url" content="{S}{d["p"]}"><meta property="og:title" content="{esc(d["title"])}">'
-      f'<meta property="og:description" content="{esc(d["desc"])}"><meta property="og:locale" content="{d["og"]}">'
-      f'<meta name="twitter:card" content="summary"><meta name="twitter:title" content="{esc(d["title"])}">'
-      f'<meta name="twitter:description" content="{esc(d["desc"])}">'
-      +''.join(f'<meta property="og:locale:alternate" content="{L[kk]["og"]}">' for kk in L if kk!=k))
-  h=(head(k,d['title'],S+d['p'],css='/home.css',extra=TC+og,desc=d['desc'])
-   +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
-   +f'<main id="main" tabindex="-1"><section class="hero wrap"><h1>{d["h1"]}</h1><p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
-   +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
-   +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p>{pop_html(k,POP_CONV,"image-converter")}</div></div></li>\n'
-   +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p>{pop_html(k,POP_PDF,"pdf")}</div></div></li>\n'
-   +soon(d,d["c2"],d["c2d"],"comp")+soon(d,d["c3"],d["c3d"],"res")+'</ul></section>\n'
-   +f'<section class="editorial wrap">{d["editorial_html"]}</section>\n'
-   +f'<section class="facts" aria-labelledby="f"><div class="wrap"><h2 id="f">{d["fh"]}</h2><ul>{facts}</ul></div></section></main>\n'
-   +f'<footer><div class="wrap">{ft_html(k)}<p>{d["legal"]}</p></div></footer></body></html>\n')
-  open(f'{D}/{d["p"]}index.html','w').write(h)
-x=L['en'];r=L['ru'];z=L['zh']
-langs404=''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}">{NAMES[k]}</a></li>' for k in L)
-open(f'{D}/404.html','w').write(head('en','404 — NoClaudKit',None,False,css='/home.css',extra=TC)+f'\n<body><a class="skip" href="#main">Skip to content</a><header><div class="wrap"><a class="brand" href="/">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="Language"><ul class="langs">{langs404}</ul></nav></div></header>\n<main id="main" tabindex="-1"><section class="hero wrap nf"><h1>404</h1><p lang="en">{x["nf"]}. <a href="/">{x["nfb"]}</a></p><p lang="ru">{r["nf"]}. <a href="/ru/">{r["nfb"]}</a></p><p lang="zh-Hans">{z["nf"]}。<a href="/zh/">{z["nfb"]}</a></p></section></main>\n<footer><div class="wrap"><span translate="no">NoClaudKit</span></div></footer></body></html>\n')
-open(f'{D}/CNAME','w').write('noclaudkit.com\n')
-open(f'{D}/.nojekyll','w').write('')
-open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noclaudkit.com/sitemap.xml\n')
-open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n<sitemap><loc>{S}pdf/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
-alts=''.join(f'<xhtml:link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}"/>' for k in L)+f'<xhtml:link rel="alternate" hreflang="x-default" href="{S}"/>'
-open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc><lastmod>{home_lastmod(k)}</lastmod>{alts}</url>\n' for k in L)+'</urlset>\n')
-# redirect stubs (sitemap lives in the image-converter repo; skip when absent so rerun = zero diff)
-sm_path=os.path.join(D,'local-image-converter','sitemap.xml')
-if os.path.isfile(sm_path):
-  sm=open(sm_path).read()
-  paths=[re.sub(r'^https://(swtormy-agents\.github\.io/local-image-converter|noclaudkit\.com/image-converter)/','',u) for u in re.findall(r'<loc>([^<]*)',sm)]
-  for p in paths:
-    f=f'{D}/local-image-converter/{p}'+('index.html' if p=='' or p.endswith('/') else '')
-    os.makedirs(os.path.dirname(f),exist_ok=True)
-    t=f'{S}image-converter/{p}'
-    open(f,'w').write(f'<!doctype html>\n<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta http-equiv="refresh" content="0; url={t}"><link rel="canonical" href="{t}"><title>Moved</title></head><body><p><a href="{t}">{t}</a></p></body></html>\n')
-  print(len(paths))
-else:
-  print(0)
+def main():
+  ensure_git_history()
+  load_seo()
+  for k,d in L.items():
+    os.makedirs(f'{D}/{d["p"]}',exist_ok=True)
+    mt=f'<div class="mt" role="note"><div class="wrap"><span>{d["mt"]}</span><a href="/" lang="en" hreflang="en">Read in English</a></div></div>' if d['mt'] else ''
+    langs=''.join(f'<li><a href="/{L[kk]["p"]}" lang="{L[kk]["hl"]}" hreflang="{L[kk]["hl"]}"'+(' aria-current="page"' if kk==k else '')+f'>{NAMES[kk]}</a></li>' for kk in L)
+    facts=''.join(f'<li>{I[ic]}<div><strong>{a}</strong><span>{b}</span></div></li>' for ic,(a,b) in zip('buf',d['f']))
+    og=(f'<meta property="og:type" content="website"><meta property="og:url" content="{S}{d["p"]}"><meta property="og:title" content="{esc(d["title"])}">'
+        f'<meta property="og:description" content="{esc(d["desc"])}"><meta property="og:locale" content="{d["og"]}">'
+        f'<meta name="twitter:card" content="summary"><meta name="twitter:title" content="{esc(d["title"])}">'
+        f'<meta name="twitter:description" content="{esc(d["desc"])}">'
+        +''.join(f'<meta property="og:locale:alternate" content="{L[kk]["og"]}">' for kk in L if kk!=k))
+    h=(head(k,d['title'],S+d['p'],css='/home.css',extra=TC+og,desc=d['desc'])
+     +f'\n<body><a class="skip" href="#main">{d["skip"]}</a>{mt}<header><div class="wrap"><a class="brand" href="/{d["p"]}">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="{d["nav"]}"><ul class="langs">{langs}</ul></nav></div></header>\n'
+     +f'<main id="main" tabindex="-1"><section class="hero wrap">{hero_h1(d["h1"])}<p>{d["lead"]}</p><a class="btn" href="{d["conv"]}">{d["cta"]}</a></section>\n'
+     +f'<section class="tools wrap" aria-labelledby="t"><h2 id="t">{d["tools"]}</h2><ul class="grid">\n'
+     +f'<li><div class="card live"><span class="ico">{I["conv"]}</span><div><h3><a href="{d["conv"]}">{d["ct"]}</a></h3><p>{d["cd"]}</p>{pop_html(k,POP_CONV,"image-converter")}</div></div></li>\n'
+     +f'<li><div class="card live"><span class="ico">{I["pdf"]}</span><div><h3><a href="{d["pdf"]}">{d["pt"]}</a></h3><p>{d["pd"]}</p>{pop_html(k,POP_PDF,"pdf")}</div></div></li>\n'
+     +soon(d,d["c2"],d["c2d"],"comp")+soon(d,d["c3"],d["c3d"],"res")+'</ul></section>\n'
+     +f'<section class="editorial wrap">{d["editorial_html"]}</section>\n'
+     +f'<section class="facts" aria-labelledby="f"><div class="wrap"><h2 id="f">{d["fh"]}</h2><ul>{facts}</ul></div></section></main>\n'
+     +f'<footer><div class="wrap">{ft_html(k)}<p>{d["legal"]}</p></div></footer></body></html>\n')
+    open(f'{D}/{d["p"]}index.html','w').write(h)
+  x=L['en'];r=L['ru'];z=L['zh']
+  langs404=''.join(f'<li><a href="/{L[k]["p"]}" lang="{L[k]["hl"]}" hreflang="{L[k]["hl"]}">{NAMES[k]}</a></li>' for k in L)
+  open(f'{D}/404.html','w').write(head('en','404 — NoClaudKit',None,False,css='/home.css',extra=TC)+f'\n<body><a class="skip" href="#main">Skip to content</a><header><div class="wrap"><a class="brand" href="/">{I["logo"]}<span translate="no">NoClaudKit</span></a><nav aria-label="Language"><ul class="langs">{langs404}</ul></nav></div></header>\n<main id="main" tabindex="-1"><section class="hero wrap nf"><h1>404</h1><p lang="en">{x["nf"]}. <a href="/">{x["nfb"]}</a></p><p lang="ru">{r["nf"]}. <a href="/ru/">{r["nfb"]}</a></p><p lang="zh-Hans">{z["nf"]}。<a href="/zh/">{z["nfb"]}</a></p></section></main>\n<footer><div class="wrap"><span translate="no">NoClaudKit</span></div></footer></body></html>\n')
+  open(f'{D}/CNAME','w').write('noclaudkit.com\n')
+  open(f'{D}/.nojekyll','w').write('')
+  open(f'{D}/robots.txt','w').write('User-agent: *\nAllow: /\nSitemap: https://noclaudkit.com/sitemap.xml\n')
+  open(f'{D}/sitemap.xml','w').write(f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<sitemap><loc>{S}sitemap-home.xml</loc></sitemap>\n<sitemap><loc>{S}image-converter/sitemap.xml</loc></sitemap>\n<sitemap><loc>{S}pdf/sitemap.xml</loc></sitemap>\n</sitemapindex>\n')
+  alts=''.join(f'<xhtml:link rel="alternate" hreflang="{L[k]["hl"]}" href="{S}{L[k]["p"]}"/>' for k in L)+f'<xhtml:link rel="alternate" hreflang="x-default" href="{S}"/>'
+  open(f'{D}/sitemap-home.xml','w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'+''.join(f'<url><loc>{S}{L[k]["p"]}</loc><lastmod>{home_lastmod(k)}</lastmod>{alts}</url>\n' for k in L)+'</urlset>\n')
+  sm_path=os.path.join(D,'local-image-converter','sitemap.xml')
+  if os.path.isfile(sm_path):
+    sm=open(sm_path).read()
+    paths=[re.sub(r'^https://(swtormy-agents\.github\.io/local-image-converter|noclaudkit\.com/image-converter)/','',u) for u in re.findall(r'<loc>([^<]*)',sm)]
+    for p in paths:
+      f=f'{D}/local-image-converter/{p}'+('index.html' if p=='' or p.endswith('/') else '')
+      os.makedirs(os.path.dirname(f),exist_ok=True)
+      t=f'{S}image-converter/{p}'
+      open(f,'w').write(f'<!doctype html>\n<html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="{CSP}"><meta http-equiv="refresh" content="0; url={t}"><link rel="canonical" href="{t}"><title>Moved</title></head><body><p><a href="{t}">{t}</a></p></body></html>\n')
+    print(len(paths))
+  else:
+    print(0)
+if __name__=='__main__': main()
