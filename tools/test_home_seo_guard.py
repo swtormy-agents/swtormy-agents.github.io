@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import random
 import sys
 import unittest
 
@@ -84,6 +85,35 @@ class EditorialGuardTests(unittest.TestCase):
 
   def test_doctype_rejected(self):
     self.assert_rejects('<!DOCTYPE html><p>x</p>')
+
+  def test_trailing_unclosed_anchor_rejected(self):
+    self.assert_rejects('<p>safe<a href="//evil.example/x"')
+
+  def test_partial_open_and_close_rejected(self):
+    self.assert_rejects('<p>x<a href="//e"')
+    self.assert_rejects('<p')
+    self.assert_rejects('x</p')
+    self.assert_rejects('before<after')
+    self.assert_rejects('x>y')
+
+  def test_whitespace_and_quote_variants_rejected(self):
+    self.assert_rejects('<p >x</p>')
+    self.assert_rejects('<a  href="/x">t</a>')
+    self.assert_rejects("<a href='/x'>t</a>")
+
+  def test_fuzz_insertions_reject_or_unchanged(self):
+    with open(SEO_PATH, encoding='utf-8') as f:
+      base = json.load(f)['en']['home']['editorial_html']
+    frags = ('<', '>', '</', '<p', '</p', '<a', '<a href="//e"', '<a href="', '">', '</a>', '<x>')
+    rng = random.Random(0)
+    for _ in range(600):
+      s = base
+      for _ in range(rng.randint(1, 4)):
+        pos = rng.randint(0, len(s))
+        s = s[:pos] + rng.choice(frags) + s[pos:]
+      err = gh.validate_editorial_html(s)
+      if not err:
+        self.assertEqual(s, base, 'only unmodified copy may pass fuzz')
 
 
 class EscapeTests(unittest.TestCase):

@@ -44,6 +44,48 @@ def fix(v):
   if isinstance(v,list): return [tuple(nb(x) for x in p) for p in v]
   return v
 L['ru']={k:(fix(v) if k not in('p','hl','conv','og','pdf') else v) for k,v in L['ru'].items()}
+_OPEN_SIMPLE=('p','ul','ol','li','strong','em')
+_CLOSE_TAGS=('p','ul','ol','li','strong','em','a')
+_A_OPEN='<a href="'
+def _tok_parent(stack): return stack[-1] if stack else None
+def _tok_allowed(par,tag):
+  allowed=ALLOWED_CHILD[None] if par is None else ALLOWED_CHILD.get(par)
+  return allowed is not None and tag in allowed
+def _tokenizer_validate(s):
+  stack=[]; pos=0; n=len(s)
+  while pos<n:
+    if s[pos]!='<':
+      if s[pos]=='>': return [f'stray > at {pos}']
+      while pos<n and s[pos] not in '<>': pos+=1
+      continue
+    matched=False
+    for tag in _CLOSE_TAGS:
+      tok=f'</{tag}>'
+      if s.startswith(tok,pos):
+        if not stack or stack[-1]!=tag: return [f'mismatched end tag </{tag}> at {pos}']
+        stack.pop(); pos+=len(tok); matched=True; break
+    if matched: continue
+    for tag in _OPEN_SIMPLE:
+      tok=f'<{tag}>'
+      if s.startswith(tok,pos):
+        par=_tok_parent(stack)
+        if not _tok_allowed(par,tag): return [f'<{tag}> not allowed inside <{par}> at {pos}']
+        stack.append(tag); pos+=len(tok); matched=True; break
+    if matched: continue
+    if s.startswith(_A_OPEN,pos):
+      par=_tok_parent(stack)
+      if not _tok_allowed(par,'a'): return [f'<a> not allowed inside <{par}> at {pos}']
+      pos+=len(_A_OPEN)
+      q=pos
+      while q<n and s[q]!='"': q+=1
+      if q>=n: return ['unterminated href string']
+      href=s[pos:q]
+      if not valid_rel_href(href): return [f'a href not allowed: {href!r}']
+      if q+1>=n or s[q+1]!='>': return ['a tag must be exactly <a href="...">']
+      pos=q+2; stack.append('a'); continue
+    return [f'invalid token at {pos}: {s[pos:pos+40]!r}']
+  if stack: return ['unclosed tags: '+', '.join(stack)]
+  return []
 class _EdGuard(HTMLParser):
   def __init__(self): super().__init__(); self.err=[]; self.stack=[]
   def _parent(self): return self.stack[-1] if self.stack else None
@@ -76,7 +118,10 @@ class _EdGuard(HTMLParser):
     if self.stack: self.err.append('unclosed tags: '+', '.join(self.stack))
 def validate_editorial_html(html):
   if FORBIDDEN_MARKUP_RE.search(html): return ['forbidden markup (<! or <?)']
-  g=_EdGuard(); g.feed(html); g.close(); return g.err
+  err=_tokenizer_validate(html)
+  if err: return err
+  g=_EdGuard(); g.feed(html); g.close()
+  return g.err
 def load_seo():
   seo=json.load(open(SEO_PATH,encoding='utf-8'))
   for lang in L:
